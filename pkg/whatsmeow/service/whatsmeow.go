@@ -1048,15 +1048,22 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 		mycli.loggerWrapper.GetLogger(mycli.userID).LogInfo("[%s] ===== MESSAGE RECEIVED ===== ID: %s, From: %s, Type: %s, Size: %s", mycli.userID, evt.Info.ID, evt.Info.Chat.String(), evt.Info.Type, messageSize)
 
-		// se readMessages for true ele marca como lida
-		if mycli.Instance.ReadMessages {
-			messageIDs := []string{evt.Info.ID}
-			err := mycli.WAClient.MarkRead(context.Background(), messageIDs, time.Now(), evt.Info.Sender, evt.Info.Sender)
-			if err != nil {
-				mycli.loggerWrapper.GetLogger(mycli.userID).LogError("[%s] Failed to auto-mark message as read: %v", mycli.userID, err)
-			} else {
-				mycli.loggerWrapper.GetLogger(mycli.userID).LogInfo("[%s] Auto-marked message as read from %s", mycli.userID, evt.Info.Chat.String())
-			}
+		// Auto-marca mensagem como lida (se readMessages estiver ativo).
+		// Captura as JIDs originais ANTES da lógica de cleanSenderID/swap abaixo,
+		// para que o recibo seja roteado corretamente pela whatsmeow.
+		if mycli.Instance.ReadMessages && !evt.Info.IsFromMe {
+			chatJID := evt.Info.Chat
+			senderJID := evt.Info.Sender
+			msgID := evt.Info.ID
+			go func() {
+				time.Sleep(1 * time.Second)
+				err := mycli.WAClient.MarkRead(context.Background(), []types.MessageID{msgID}, time.Now(), chatJID, senderJID)
+				if err != nil {
+					mycli.loggerWrapper.GetLogger(mycli.userID).LogError("[%s] Failed to auto-mark message as read: %v", mycli.userID, err)
+				} else {
+					mycli.loggerWrapper.GetLogger(mycli.userID).LogInfo("[%s] Auto-marked message as read from %s", mycli.userID, chatJID.String())
+				}
+			}()
 		}
 
 		// se ignoreStatus for true e o chat for broadcast ou o id for broadcast retorna
@@ -1118,19 +1125,6 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			if cleanedLID, err := types.ParseJID(cleanSenderAlt); err == nil {
 				evt.Info.SenderAlt = cleanedLID
 			}
-		}
-
-		// Auto-marca mensagens como lidas se configurado
-		if mycli.Instance.ReadMessages && !evt.Info.IsFromMe {
-			go func() {
-				time.Sleep(1 * time.Second) // Pequeno delay para parecer mais natural
-				err := mycli.WAClient.MarkRead(context.Background(), []types.MessageID{evt.Info.ID}, evt.Info.Timestamp, evt.Info.Chat, evt.Info.Sender)
-				if err != nil {
-					mycli.loggerWrapper.GetLogger(mycli.userID).LogError("[%s] Failed to auto-mark message as read: %v", mycli.userID, err)
-				} else {
-					mycli.loggerWrapper.GetLogger(mycli.userID).LogInfo("[%s] Auto-marked message as read from %s", mycli.userID, evt.Info.Chat.String())
-				}
-			}()
 		}
 
 		parsedMessageType := utils.GetMessageType(evt.Message)
