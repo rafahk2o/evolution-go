@@ -151,6 +151,8 @@ func (c *Client) ForwardEvolutionEvent(instance *instance_model.Instance, payloa
 // handleReceipt traduz recibos do WhatsApp (Delivered/Read) em atualizações
 // de status no Chatwoot para mensagens que o agente enviou.
 func (c *Client) handleReceipt(instance *instance_model.Instance, event map[string]interface{}) error {
+	logger := c.loggerWrapper.GetLogger(instance.Id)
+
 	state := strings.ToLower(stringValue(event["state"]))
 	var status string
 	switch state {
@@ -159,33 +161,44 @@ func (c *Client) handleReceipt(instance *instance_model.Instance, event map[stri
 	case "delivered":
 		status = "delivered"
 	default:
+		logger.LogInfo("[%s] chatwoot receipt: ignoring state=%q", instance.Id, state)
 		return nil
 	}
 
 	data, _ := event["data"].(map[string]interface{})
 	if data == nil {
+		logger.LogWarn("[%s] chatwoot receipt: missing data field", instance.Id)
 		return nil
 	}
 
 	ids := extractMessageIDs(data)
 	if len(ids) == 0 {
+		logger.LogWarn("[%s] chatwoot receipt: no message IDs found in payload (state=%s)", instance.Id, state)
 		return nil
 	}
 
+	logger.LogInfo("[%s] chatwoot receipt received: state=%s ids=%v", instance.Id, state, ids)
+
+	matched := 0
 	for _, id := range ids {
-		if !strings.HasPrefix(id, "chatwoot_") {
+		if !strings.HasPrefix(strings.ToLower(id), "chatwoot_") {
 			continue
 		}
-		chatwootMsgID := strings.TrimPrefix(id, "chatwoot_")
+		chatwootMsgID := id[len("chatwoot_"):]
 		conversationID, ok := c.lookupOutgoing(chatwootMsgID)
 		if !ok {
+			logger.LogWarn("[%s] chatwoot receipt: no conversation cached for msg=%s — agent reply mapping missing", instance.Id, chatwootMsgID)
 			continue
 		}
+		matched++
 		if err := c.updateChatwootMessageStatus(instance, conversationID, chatwootMsgID, status); err != nil {
-			c.loggerWrapper.GetLogger(instance.Id).LogWarn("[%s] chatwoot status update failed (msg=%s, status=%s): %v", instance.Id, chatwootMsgID, status, err)
+			logger.LogError("[%s] chatwoot status update failed (msg=%s conv=%s status=%s): %v", instance.Id, chatwootMsgID, conversationID, status, err)
 		} else {
-			c.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] chatwoot status updated (msg=%s, status=%s)", instance.Id, chatwootMsgID, status)
+			logger.LogInfo("[%s] chatwoot status updated (msg=%s conv=%s status=%s)", instance.Id, chatwootMsgID, conversationID, status)
 		}
+	}
+	if matched == 0 {
+		logger.LogInfo("[%s] chatwoot receipt: no chatwoot-prefixed IDs in this batch", instance.Id)
 	}
 	return nil
 }
@@ -224,17 +237,23 @@ func (c *Client) updateChatwootMessageStatus(instance *instance_model.Instance, 
 }
 
 func extractMessageIDs(data map[string]interface{}) []string {
-	raw, ok := firstValue(data, "MessageIDs", "messageIds", "message_ids", "MessageIds").([]interface{})
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(raw))
-	for _, v := range raw {
-		if s := stringValue(v); s != "" {
-			out = append(out, s)
+	keys := []string{"MessageIDs", "MessageIds", "messageIds", "message_ids", "messageIDs", "ids"}
+	for _, key := range keys {
+		raw, ok := data[key].([]interface{})
+		if !ok || len(raw) == 0 {
+			continue
+		}
+		out := make([]string, 0, len(raw))
+		for _, v := range raw {
+			if s := stringValue(v); s != "" {
+				out = append(out, s)
+			}
+		}
+		if len(out) > 0 {
+			return out
 		}
 	}
-	return out
+	return nil
 }
 
 func (c *Client) upsertContact(settings *instance_model.ChatwootSettings, message *IncomingMessage) error {
