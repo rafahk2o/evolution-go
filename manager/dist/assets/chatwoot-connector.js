@@ -12,9 +12,9 @@
 
   var css = ""
     + ".cw-chatwoot-card{position:relative;}"
-    + ".cw-card-button{position:absolute;right:18px;bottom:18px;z-index:5;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 12px;border:1px solid rgba(37,211,102,.35);border-radius:6px;background:rgba(17,24,39,.94);color:#25d366;font-weight:700;font-size:13px;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease,background .15s ease,border-color .15s ease;}"
+    + ".cw-card-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;max-width:0;padding:0;border:0;border-radius:6px;background:rgba(17,24,39,.94);color:#25d366;font-weight:700;font-size:13px;line-height:1;white-space:nowrap;overflow:hidden;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease,background .15s ease,border-color .15s ease,max-width .15s ease,padding .15s ease,border-width .15s ease;}"
     + ".cw-card-button img{width:18px;height:18px;object-fit:contain;}"
-    + ".cw-chatwoot-card:hover .cw-card-button,.cw-chatwoot-card:focus-within .cw-card-button{opacity:1;pointer-events:auto;transform:translateY(0);}"
+    + ".cw-chatwoot-card:hover .cw-card-button,.cw-chatwoot-card:focus-within .cw-card-button{max-width:140px;padding:0 12px;border:1px solid rgba(37,211,102,.35);opacity:1;pointer-events:auto;transform:translateY(0);}"
     + ".cw-card-button:hover{background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.65);}"
     + ".cw-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:16px;}"
     + ".cw-modal{width:min(620px,100%);max-height:92vh;overflow:auto;background:#111827;border:1px solid #334155;border-radius:8px;color:#e5e7eb;box-shadow:0 24px 80px rgba(0,0,0,.55);}"
@@ -144,6 +144,7 @@
       var card = findCard(instance);
       if (!card) return;
       card.classList.add("cw-chatwoot-card");
+      var row = actionRow(card);
       var button = document.querySelector('[data-chatwoot-button-for="' + instance.id + '"]');
       if (!button) {
         button = document.createElement("button");
@@ -158,8 +159,8 @@
           openModal(instance);
         });
       }
-      if (button.parentElement !== card) {
-        card.appendChild(button);
+      if (button.parentElement !== row) {
+        row.appendChild(button);
       }
     });
   }
