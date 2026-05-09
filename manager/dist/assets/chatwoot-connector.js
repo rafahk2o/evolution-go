@@ -3,11 +3,13 @@
 
   const STYLE_ID = 'cw-connector-style';
   const MODAL_ID = 'cw-connector-modal';
-  const CARD_FLAG = 'cwBound';
+  const POLL_INTERVAL_MS = 1500;
 
+  const boundCards = new WeakSet();
   let instanceCache = null;
   let cacheTime = 0;
   let inFlight = null;
+  let injecting = false;
 
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -31,10 +33,10 @@
         align-items: center;
         gap: 5px;
         line-height: 1;
-        backdrop-filter: blur(4px);
-        transition: background 0.15s ease, transform 0.15s ease;
+        contain: layout paint;
+        transition: background 0.15s ease;
       }
-      .cw-card-btn:hover { background: rgba(45, 154, 211, 0.35); transform: translateY(-1px); }
+      .cw-card-btn:hover { background: rgba(45, 154, 211, 0.35); }
       .cw-card-btn svg { display: block; }
 
       .cw-overlay {
@@ -215,36 +217,54 @@
   }
 
   async function injectButtons() {
-    const candidates = document.querySelectorAll('.group.bg-sidebar');
-    if (!candidates.length) return;
-    let map = null;
-    for (let i = 0; i < candidates.length; i++) {
-      const card = candidates[i];
-      if (!isInstanceCard(card)) continue;
-      if (card.dataset[CARD_FLAG] === '1') continue;
-      const name = findCardName(card);
-      if (!name) continue;
+    if (injecting) return;
+    injecting = true;
+    try {
+      const candidates = document.querySelectorAll('.group.bg-sidebar');
+      if (!candidates.length) return;
 
-      if (!map) {
-        map = await fetchInstances();
-        if (!map) return;
+      const pending = [];
+      for (let i = 0; i < candidates.length; i++) {
+        const card = candidates[i];
+        if (boundCards.has(card)) continue;
+        if (!isInstanceCard(card)) continue;
+        if (card.querySelector(':scope > .cw-card-btn')) {
+          boundCards.add(card);
+          continue;
+        }
+        const name = findCardName(card);
+        if (!name) continue;
+        pending.push({ card, name });
       }
-      const data = map[name];
-      if (!data || !data.id) continue;
+      if (!pending.length) return;
 
-      card.dataset[CARD_FLAG] = '1';
-      const btn = document.createElement('button');
-      btn.className = 'cw-card-btn';
-      btn.type = 'button';
-      btn.title = 'Configurar Chatwoot';
-      btn.innerHTML =
-        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chatwoot';
-      btn.addEventListener('click', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        openModal(data);
-      });
-      card.appendChild(btn);
+      const map = await fetchInstances();
+      if (!map) return;
+
+      for (let i = 0; i < pending.length; i++) {
+        const { card, name } = pending[i];
+        if (!card.isConnected) continue;
+        if (boundCards.has(card)) continue;
+        const data = map[name];
+        if (!data || !data.id) continue;
+
+        boundCards.add(card);
+        const btn = document.createElement('button');
+        btn.className = 'cw-card-btn';
+        btn.type = 'button';
+        btn.title = 'Configurar Chatwoot';
+        btn.setAttribute('data-cw-btn', '1');
+        btn.innerHTML =
+          '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chatwoot';
+        btn.addEventListener('click', e => {
+          e.preventDefault();
+          e.stopPropagation();
+          openModal(data);
+        });
+        card.appendChild(btn);
+      }
+    } finally {
+      injecting = false;
     }
   }
 
@@ -448,18 +468,13 @@
 
   function start() {
     injectStyles();
-    let scheduled = false;
-    const schedule = () => {
-      if (scheduled) return;
-      scheduled = true;
-      requestAnimationFrame(() => {
-        scheduled = false;
-        injectButtons();
-      });
-    };
-    const observer = new MutationObserver(schedule);
-    observer.observe(document.body, { childList: true, subtree: true });
-    schedule();
+    injectButtons();
+    setInterval(() => {
+      if (!document.hidden) injectButtons();
+    }, POLL_INTERVAL_MS);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) injectButtons();
+    });
   }
 
   if (document.readyState === 'loading') {
