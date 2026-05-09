@@ -477,7 +477,67 @@ func extractContent(data map[string]interface{}) string {
 		}
 	}
 
+	if loc := extractLocationText(message); loc != "" {
+		return loc
+	}
+
 	return ""
+}
+
+func extractLocationText(message map[string]interface{}) string {
+	for _, mt := range []string{"locationMessage", "liveLocationMessage"} {
+		part, ok := message[mt].(map[string]interface{})
+		if !ok || part == nil {
+			continue
+		}
+		lat, latOk := floatValue(firstValue(part, "degreesLatitude", "DegreesLatitude"))
+		lng, lngOk := floatValue(firstValue(part, "degreesLongitude", "DegreesLongitude"))
+		if !latOk || !lngOk || (lat == 0 && lng == 0) {
+			continue
+		}
+
+		var b strings.Builder
+		if mt == "liveLocationMessage" {
+			b.WriteString("📍 Localização ao vivo")
+		} else {
+			b.WriteString("📍 Localização")
+		}
+
+		if name := strings.TrimSpace(firstString(part, "name", "Name")); name != "" {
+			b.WriteString("\n")
+			b.WriteString(name)
+		}
+		if address := strings.TrimSpace(firstString(part, "address", "Address")); address != "" {
+			b.WriteString("\n")
+			b.WriteString(address)
+		}
+		if caption := strings.TrimSpace(firstString(part, "caption", "Caption")); caption != "" {
+			b.WriteString("\n")
+			b.WriteString(caption)
+		}
+
+		b.WriteString(fmt.Sprintf("\nhttps://www.google.com/maps?q=%.6f,%.6f", lat, lng))
+		return b.String()
+	}
+	return ""
+}
+
+func floatValue(value interface{}) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case string:
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
 }
 
 func extractMediaInfo(data map[string]interface{}, info map[string]interface{}) *mediaInfo {
