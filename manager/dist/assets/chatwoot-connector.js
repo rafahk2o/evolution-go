@@ -24,22 +24,22 @@
         background: rgba(45, 154, 211, 0.18);
         color: #2d9ad3;
         border: 1px solid rgba(45, 154, 211, 0.5);
-        border-radius: 4px;
-        padding: 2px 7px;
-        font-size: 10px;
+        border-radius: 5px;
+        padding: 3px 9px 3px 5px;
+        font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.02em;
         cursor: pointer;
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 6px;
         line-height: 1.4;
         contain: layout paint;
         transition: background 0.15s ease;
       }
       .cw-card-btn:hover { background: rgba(45, 154, 211, 0.35); }
       .cw-card-btn svg, .cw-card-btn img { display: block; }
-      .cw-card-btn img { width: 11px; height: 11px; border-radius: 50%; }
+      .cw-card-btn img { width: 16px; height: 16px; border-radius: 50%; }
 
       .cw-overlay {
         position: fixed; inset: 0;
