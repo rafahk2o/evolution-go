@@ -12,7 +12,7 @@
 
   var css = ""
     + ".cw-chatwoot-card{position:relative;}"
-    + ".cw-card-button{position:absolute;top:0;right:0;z-index:5;display:inline-flex;align-items:center;justify-content:center;gap:4px;height:18px;padding:0 6px;border:1px solid rgba(37,211,102,.35);border-top:0;border-right:0;border-radius:0 0 0 6px;background:rgba(17,24,39,.96);color:#25d366;font-weight:700;font-size:10px;line-height:1;white-space:nowrap;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease,background .15s ease,border-color .15s ease;}"
+    + ".cw-card-button{position:absolute;top:8px;right:8px;z-index:5;display:inline-flex;align-items:center;justify-content:center;gap:4px;height:20px;padding:0 8px;border:1px solid rgba(37,211,102,.4);border-radius:5px;background:rgba(17,24,39,.96);color:#25d366;font-weight:700;font-size:10px;line-height:1;white-space:nowrap;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease,background .15s ease,border-color .15s ease;}"
     + ".cw-card-button img{width:12px;height:12px;object-fit:contain;}"
     + ".cw-chatwoot-card:hover .cw-card-button,.cw-chatwoot-card:focus-within .cw-card-button{opacity:1;pointer-events:auto;transform:translateY(0);}"
     + ".cw-card-button:hover{background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.65);}"

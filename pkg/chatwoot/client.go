@@ -21,12 +21,14 @@ import (
 
 	instance_model "github.com/EvolutionAPI/evolution-go/pkg/instance/model"
 	logger_wrapper "github.com/EvolutionAPI/evolution-go/pkg/logger"
+	"github.com/patrickmn/go-cache"
 )
 
 type Client struct {
 	httpClient    *http.Client
 	mediaClient   *http.Client
 	loggerWrapper *logger_wrapper.LoggerManager
+	outgoing      *cache.Cache
 }
 
 type Attachment struct {
@@ -66,7 +68,35 @@ func NewClient(loggerWrapper *logger_wrapper.LoggerManager) *Client {
 			Timeout: 60 * time.Second,
 		},
 		loggerWrapper: loggerWrapper,
+		outgoing:      cache.New(24*time.Hour, 1*time.Hour),
 	}
+}
+
+// RegisterOutgoing memoriza o mapeamento entre o ID da mensagem do Chatwoot
+// e a conversa onde ela foi enviada. Usamos isso para atualizar o status
+// (sent/delivered/read) quando o WhatsApp emite recibos.
+func (c *Client) RegisterOutgoing(chatwootMsgID, conversationID string) {
+	if c == nil || c.outgoing == nil {
+		return
+	}
+	chatwootMsgID = strings.TrimSpace(chatwootMsgID)
+	conversationID = strings.TrimSpace(conversationID)
+	if chatwootMsgID == "" || conversationID == "" {
+		return
+	}
+	c.outgoing.Set(chatwootMsgID, conversationID, cache.DefaultExpiration)
+}
+
+func (c *Client) lookupOutgoing(chatwootMsgID string) (string, bool) {
+	if c == nil || c.outgoing == nil {
+		return "", false
+	}
+	v, ok := c.outgoing.Get(strings.TrimSpace(chatwootMsgID))
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	return s, ok
 }
 
 func (c *Client) Enabled(instance *instance_model.Instance) bool {
@@ -80,6 +110,16 @@ func (c *Client) Enabled(instance *instance_model.Instance) bool {
 func (c *Client) ForwardEvolutionEvent(instance *instance_model.Instance, payload []byte) error {
 	if !c.Enabled(instance) {
 		return nil
+	}
+
+	var event map[string]interface{}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return err
+	}
+
+	switch strings.ToLower(stringValue(event["event"])) {
+	case "receipt":
+		return c.handleReceipt(instance, event)
 	}
 
 	settings := settingsFromInstance(instance)
@@ -106,6 +146,95 @@ func (c *Client) ForwardEvolutionEvent(instance *instance_model.Instance, payloa
 
 	c.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Chatwoot incoming message synced - source: %s conversation: %d hasAttachment=%v", instance.Id, message.SourceID, conversationID, message.Attachment != nil)
 	return nil
+}
+
+// handleReceipt traduz recibos do WhatsApp (Delivered/Read) em atualizações
+// de status no Chatwoot para mensagens que o agente enviou.
+func (c *Client) handleReceipt(instance *instance_model.Instance, event map[string]interface{}) error {
+	state := strings.ToLower(stringValue(event["state"]))
+	var status string
+	switch state {
+	case "read":
+		status = "read"
+	case "delivered":
+		status = "delivered"
+	default:
+		return nil
+	}
+
+	data, _ := event["data"].(map[string]interface{})
+	if data == nil {
+		return nil
+	}
+
+	ids := extractMessageIDs(data)
+	if len(ids) == 0 {
+		return nil
+	}
+
+	for _, id := range ids {
+		if !strings.HasPrefix(id, "chatwoot_") {
+			continue
+		}
+		chatwootMsgID := strings.TrimPrefix(id, "chatwoot_")
+		conversationID, ok := c.lookupOutgoing(chatwootMsgID)
+		if !ok {
+			continue
+		}
+		if err := c.updateChatwootMessageStatus(instance, conversationID, chatwootMsgID, status); err != nil {
+			c.loggerWrapper.GetLogger(instance.Id).LogWarn("[%s] chatwoot status update failed (msg=%s, status=%s): %v", instance.Id, chatwootMsgID, status, err)
+		} else {
+			c.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] chatwoot status updated (msg=%s, status=%s)", instance.Id, chatwootMsgID, status)
+		}
+	}
+	return nil
+}
+
+func (c *Client) updateChatwootMessageStatus(instance *instance_model.Instance, conversationID, messageID, status string) error {
+	if instance.ChatwootURL == "" || instance.ChatwootAccountID == "" || instance.ChatwootAccountToken == "" {
+		return errors.New("chatwoot account credentials missing")
+	}
+
+	endpoint := fmt.Sprintf("%s/api/v1/accounts/%s/conversations/%s/messages/%s",
+		strings.TrimRight(instance.ChatwootURL, "/"),
+		url.PathEscape(instance.ChatwootAccountID),
+		url.PathEscape(conversationID),
+		url.PathEscape(messageID),
+	)
+
+	body, _ := json.Marshal(map[string]string{"status": status})
+	req, err := http.NewRequest(http.MethodPatch, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("api_access_token", instance.ChatwootAccountToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("chatwoot PATCH %s: %s — %s", endpoint, resp.Status, string(respBody))
+	}
+	return nil
+}
+
+func extractMessageIDs(data map[string]interface{}) []string {
+	raw, ok := firstValue(data, "MessageIDs", "messageIds", "message_ids", "MessageIds").([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		if s := stringValue(v); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func (c *Client) upsertContact(settings *instance_model.ChatwootSettings, message *IncomingMessage) error {

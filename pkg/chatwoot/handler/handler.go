@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/EvolutionAPI/evolution-go/pkg/chatwoot"
 	instance_model "github.com/EvolutionAPI/evolution-go/pkg/instance/model"
 	instance_repository "github.com/EvolutionAPI/evolution-go/pkg/instance/repository"
 	message_service "github.com/EvolutionAPI/evolution-go/pkg/message/service"
@@ -22,6 +23,7 @@ type Handler struct {
 	instanceRepository instance_repository.InstanceRepository
 	sendService        send_service.SendService
 	messageService     message_service.MessageService
+	chatwootClient     *chatwoot.Client
 	httpClient         *http.Client
 }
 
@@ -39,11 +41,13 @@ func NewHandler(
 	instanceRepository instance_repository.InstanceRepository,
 	sendService send_service.SendService,
 	messageService message_service.MessageService,
+	chatwootClient *chatwoot.Client,
 ) *Handler {
 	return &Handler{
 		instanceRepository: instanceRepository,
 		sendService:        sendService,
 		messageService:     messageService,
+		chatwootClient:     chatwootClient,
 		httpClient:         &http.Client{Timeout: 15 * time.Second},
 	}
 }
@@ -85,6 +89,14 @@ func (h *Handler) Webhook(ctx *gin.Context) {
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Registra o mapeamento Chatwoot msgID → conversation para
+	// poder atualizar o status (delivered/read) quando o WhatsApp emitir recibo.
+	if h.chatwootClient != nil {
+		chatwootMsgID := stringValue(payload.ID)
+		conversationID := convertibleString(payload.Conversation["id"])
+		h.chatwootClient.RegisterOutgoing(chatwootMsgID, conversationID)
 	}
 
 	// Quando o agente responde no Chatwoot, marcar as mensagens incoming

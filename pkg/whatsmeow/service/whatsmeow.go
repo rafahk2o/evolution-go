@@ -2055,6 +2055,18 @@ func (w *whatsmeowService) CallWebhook(instance *instance_model.Instance, queueN
 			}
 		}
 	case "Receipt":
+		// Encaminha para Chatwoot sempre, independente de subscriptions —
+		// é assim que o status (delivered/read) das mensagens do agente
+		// é atualizado dentro do Chatwoot.
+		if w.chatwootClient != nil && w.chatwootClient.Enabled(instance) {
+			cwData := jsonData
+			go func() {
+				if err := w.chatwootClient.ForwardEvolutionEvent(instance, cwData); err != nil {
+					w.loggerWrapper.GetLogger(instance.Id).LogError("[%s] Failed to sync receipt to Chatwoot: %v", instance.Id, err)
+				}
+			}()
+		}
+
 		if contains(subscriptions, "READ_RECEIPT") {
 			w.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Event received of type %s", instance.Id, eventType)
 			w.sendToQueueOrWebhook(instance, queueName, jsonData)
