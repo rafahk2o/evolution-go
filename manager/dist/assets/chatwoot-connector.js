@@ -1,489 +1,358 @@
 (function () {
-  'use strict';
+  "use strict";
 
-  const STYLE_ID = 'cw-connector-style';
-  const MODAL_ID = 'cw-connector-modal';
-  const POLL_INTERVAL_MS = 1500;
+  var state = {
+    instances: [],
+    loading: false,
+    current: null,
+    settings: null,
+    advanced: null,
+    webhookUrl: "",
+  };
 
-  const boundCards = new WeakSet();
-  let instanceCache = null;
-  let cacheTime = 0;
-  let inFlight = null;
-  let injecting = false;
+  var css = ""
+    + ".cw-card-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 12px;border:0;border-left:1px solid rgba(255,255,255,.08);background:transparent;color:#25d366;font-weight:700;font-size:14px;cursor:pointer;}"
+    + ".cw-card-button:hover{background:rgba(37,211,102,.1);}"
+    + ".cw-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:16px;}"
+    + ".cw-modal{width:min(620px,100%);max-height:92vh;overflow:auto;background:#111827;border:1px solid #334155;border-radius:8px;color:#e5e7eb;box-shadow:0 24px 80px rgba(0,0,0,.55);}"
+    + ".cw-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #263241;position:sticky;top:0;background:#111827;z-index:1;}"
+    + ".cw-title{font-size:16px;font-weight:800;}"
+    + ".cw-close{border:0;background:transparent;color:#9ca3af;font-size:24px;line-height:1;cursor:pointer;}"
+    + ".cw-body{padding:16px 18px 18px;}"
+    + ".cw-section{border-top:1px solid #263241;padding-top:14px;margin-top:14px;}"
+    + ".cw-section-title{text-align:center;font-weight:800;font-size:14px;color:#f9fafb;margin-bottom:10px;}"
+    + ".cw-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}"
+    + ".cw-field{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;}"
+    + ".cw-field label{font-size:12px;font-weight:700;color:#f3f4f6;}"
+    + ".cw-field input,.cw-field select{height:34px;border:1px solid #334155;border-radius:4px;background:#0b1220;color:#e5e7eb;padding:0 10px;font-size:13px;outline:none;}"
+    + ".cw-field input:focus,.cw-field select:focus{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.12);}"
+    + ".cw-help{font-size:11px;color:#94a3b8;line-height:1.4;}"
+    + ".cw-row{display:flex;align-items:center;gap:8px;}"
+    + ".cw-row input{flex:1;}"
+    + ".cw-copy,.cw-toggle,.cw-save,.cw-cancel{border:0;border-radius:5px;height:34px;padding:0 12px;font-weight:800;font-size:12px;cursor:pointer;}"
+    + ".cw-copy,.cw-save{background:#2dd4a0;color:#062016;}"
+    + ".cw-cancel,.cw-toggle{background:#1f2937;color:#e5e7eb;border:1px solid #374151;}"
+    + ".cw-switch{display:inline-flex;align-items:center;gap:8px;margin:4px 0 8px;}"
+    + ".cw-switch input{width:16px;height:16px;accent-color:#22c55e;}"
+    + ".cw-footer{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #263241;padding:12px 18px;position:sticky;bottom:0;background:#111827;}"
+    + ".cw-alert{padding:10px 12px;border-radius:5px;margin-bottom:12px;font-size:12px;}"
+    + ".cw-alert.error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fecaca;}"
+    + ".cw-alert.ok{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#bbf7d0;}"
+    + ".cw-loading{padding:28px;text-align:center;color:#cbd5e1;}"
+    + "@media(max-width:640px){.cw-grid{grid-template-columns:1fr}.cw-modal{max-height:96vh}}";
 
-  function injectStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
-    style.textContent = `
-      .cw-card-btn {
-        position: absolute;
-        top: 8px;
-        right: 10px;
-        z-index: 5;
-        background: rgba(45, 154, 211, 0.18);
-        color: #2d9ad3;
-        border: 1px solid rgba(45, 154, 211, 0.5);
-        border-radius: 7px;
-        padding: 4px 12px 4px 6px;
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        line-height: 1.4;
-        contain: layout paint;
-        transition: background 0.15s ease;
-      }
-      .cw-card-btn:hover { background: rgba(45, 154, 211, 0.35); }
-      .cw-card-btn svg, .cw-card-btn img { display: block; }
-      .cw-card-btn img { width: 22px; height: 22px; border-radius: 50%; }
+  var style = document.createElement("style");
+  style.textContent = css;
+  document.head.appendChild(style);
 
-      .cw-overlay {
-        position: fixed; inset: 0;
-        background: rgba(0, 0, 0, 0.65);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 9999;
-        font-family: inherit;
-      }
-      .cw-modal {
-        background: #1a1d23;
-        color: #e6e8eb;
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 12px;
-        width: min(92vw, 500px);
-        max-height: 92vh;
-        overflow-y: auto;
-        padding: 22px 22px 18px;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-      }
-      .cw-modal-header {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 18px; padding-bottom: 12px;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-      }
-      .cw-modal-header h2 { margin: 0; font-size: 17px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
-      .cw-modal-header h2 img { width: 22px; height: 22px; border-radius: 50%; }
-      .cw-modal-header h2 small { font-weight: 400; opacity: 0.6; font-size: 13px; }
-      .cw-close {
-        background: none; border: none; color: inherit;
-        font-size: 24px; line-height: 1; cursor: pointer; padding: 0 4px;
-      }
-      .cw-close:hover { opacity: 0.7; }
-
-      .cw-section-title {
-        font-size: 11px; font-weight: 700; text-transform: uppercase;
-        letter-spacing: 0.06em; opacity: 0.65;
-        margin: 16px 0 8px;
-      }
-      .cw-field { margin-bottom: 10px; }
-      .cw-field label { display: block; font-size: 12px; margin-bottom: 5px; opacity: 0.85; }
-      .cw-field input[type="text"], .cw-field input[type="password"] {
-        width: 100%; padding: 9px 10px; box-sizing: border-box;
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.12);
-        color: inherit; border-radius: 6px; font-size: 13px;
-        font-family: inherit;
-      }
-      .cw-field input:focus { outline: none; border-color: #2d9ad3; }
-
-      .cw-row { display: flex; gap: 8px; }
-      .cw-row .cw-field { flex: 1; }
-
-      .cw-toggle {
-        display: inline-flex; align-items: center; gap: 8px;
-        cursor: pointer; user-select: none;
-        background: rgba(255,255,255,0.04);
-        padding: 7px 12px; border-radius: 6px;
-        border: 1px solid rgba(255,255,255,0.12);
-        font-size: 13px;
-      }
-      .cw-toggle input { accent-color: #2d9ad3; margin: 0; }
-
-      .cw-webhook {
-        display: flex; gap: 6px; align-items: center;
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius: 6px; padding: 4px 4px 4px 8px;
-      }
-      .cw-webhook input {
-        flex: 1; background: transparent; border: none; color: inherit;
-        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-        font-size: 11px; padding: 6px 0;
-      }
-      .cw-webhook input:focus { outline: none; }
-      .cw-webhook .cw-btn-copy {
-        background: rgba(45,154,211,0.2); color: #2d9ad3;
-        padding: 5px 12px; font-size: 11px; font-weight: 600;
-      }
-
-      .cw-btn {
-        padding: 9px 16px; border-radius: 6px; cursor: pointer;
-        font-size: 13px; font-weight: 500; border: none;
-        font-family: inherit;
-        transition: background 0.15s ease;
-      }
-      .cw-btn:disabled { opacity: 0.6; cursor: progress; }
-      .cw-btn-primary { background: #2d9ad3; color: white; }
-      .cw-btn-primary:hover:not(:disabled) { background: #2589bf; }
-      .cw-btn-secondary {
-        background: transparent; color: inherit;
-        border: 1px solid rgba(255,255,255,0.18);
-      }
-      .cw-btn-secondary:hover { background: rgba(255,255,255,0.05); }
-
-      .cw-actions {
-        display: flex; gap: 8px; justify-content: flex-end;
-        margin-top: 18px; padding-top: 14px;
-        border-top: 1px solid rgba(255,255,255,0.08);
-      }
-
-      .cw-msg { font-size: 12px; margin-top: 10px; min-height: 16px; }
-      .cw-msg.error { color: #ef4444; }
-      .cw-msg.success { color: #10b981; }
-
-      .cw-loading { padding: 24px; text-align: center; opacity: 0.7; font-size: 13px; }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function getAuth() {
+  function authState() {
     try {
-      const raw = localStorage.getItem('evolution-auth');
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      const state = parsed.state || parsed;
-      if (!state || !state.apiKey) return null;
-      return { apiUrl: (state.apiUrl || '').replace(/\/+$/, ''), apiKey: state.apiKey };
-    } catch {
-      return null;
+      var raw = localStorage.getItem("evolution-auth");
+      var parsed = raw ? JSON.parse(raw) : {};
+      var data = parsed.state || parsed;
+      return {
+        apiUrl: (data.apiUrl || window.location.origin).replace(/\/$/, ""),
+        apiKey: data.apiKey || "",
+      };
+    } catch (_) {
+      return { apiUrl: window.location.origin, apiKey: "" };
     }
   }
 
-  async function fetchInstances() {
-    const auth = getAuth();
-    if (!auth) return null;
-    if (instanceCache && Date.now() - cacheTime < 30000) return instanceCache;
-    if (inFlight) return inFlight;
-    inFlight = (async () => {
-      try {
-        const res = await fetch(auth.apiUrl + '/instance/all', {
-          headers: { apikey: auth.apiKey, 'Content-Type': 'application/json' },
-        });
-        if (!res.ok) return null;
-        const json = await res.json();
-        const list = (json && json.data) || [];
-        const map = {};
-        list.forEach(i => {
-          if (i && i.name) map[i.name] = i;
-        });
-        instanceCache = map;
-        cacheTime = Date.now();
-        return map;
-      } catch {
-        return null;
-      } finally {
-        inFlight = null;
-      }
-    })();
-    return inFlight;
+  function normalizeInstance(item) {
+    return {
+      id: item.id || item.instanceId || item.instanceID || "",
+      name: item.name || item.instanceName || item.instance || "",
+      token: item.token || item.apikey || item.apiKey || "",
+      raw: item,
+    };
   }
 
-  function classOf(el) {
-    if (!el) return '';
-    return typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class')) || '';
-  }
-
-  function isInstanceCard(el) {
-    if (!(el instanceof Element)) return false;
-    const cls = classOf(el);
-    return (
-      cls.indexOf('group') !== -1 &&
-      cls.indexOf('bg-sidebar') !== -1 &&
-      cls.indexOf('border-sidebar-border') !== -1 &&
-      cls.indexOf('overflow-hidden') !== -1
-    );
-  }
-
-  function findCardName(card) {
-    const ps = card.querySelectorAll('p.truncate');
-    for (let i = 0; i < ps.length; i++) {
-      const cls = classOf(ps[i]);
-      if (cls.indexOf('text-xs') !== -1 && cls.indexOf('text-sidebar-foreground/60') !== -1) {
-        return (ps[i].textContent || '').trim();
-      }
-    }
-    const h3 = card.querySelector('h3');
-    return h3 ? (h3.textContent || '').trim() : '';
-  }
-
-  async function injectButtons() {
-    if (injecting) return;
-    injecting = true;
-    try {
-      const candidates = document.querySelectorAll('.group.bg-sidebar');
-      if (!candidates.length) return;
-
-      const pending = [];
-      for (let i = 0; i < candidates.length; i++) {
-        const card = candidates[i];
-        if (boundCards.has(card)) continue;
-        if (!isInstanceCard(card)) continue;
-        if (card.querySelector(':scope > .cw-card-btn')) {
-          boundCards.add(card);
-          continue;
+  function request(path, options, token) {
+    var auth = authState();
+    var headers = Object.assign({ "Content-Type": "application/json" }, options && options.headers ? options.headers : {});
+    if (token || auth.apiKey) headers.apikey = token || auth.apiKey;
+    return fetch(auth.apiUrl + path, Object.assign({}, options || {}, { headers: headers })).then(function (res) {
+      return res.text().then(function (text) {
+        var body = text ? JSON.parse(text) : {};
+        if (!res.ok) {
+          var msg = body.error || body.message || res.statusText;
+          throw new Error(msg);
         }
-        const name = findCardName(card);
-        if (!name) continue;
-        pending.push({ card, name });
-      }
-      if (!pending.length) return;
-
-      const map = await fetchInstances();
-      if (!map) return;
-
-      for (let i = 0; i < pending.length; i++) {
-        const { card, name } = pending[i];
-        if (!card.isConnected) continue;
-        if (boundCards.has(card)) continue;
-        const data = map[name];
-        if (!data || !data.id) continue;
-
-        boundCards.add(card);
-        const btn = document.createElement('button');
-        btn.className = 'cw-card-btn';
-        btn.type = 'button';
-        btn.title = 'Configurar Chatwoot';
-        btn.setAttribute('data-cw-btn', '1');
-        btn.innerHTML =
-          '<img src="/assets/chatwoot-icon.png" alt="" />Chatwoot';
-        btn.addEventListener('click', e => {
-          e.preventDefault();
-          e.stopPropagation();
-          openModal(data);
-        });
-        card.appendChild(btn);
-      }
-    } finally {
-      injecting = false;
-    }
+        return body;
+      });
+    });
   }
 
-  function escapeHtml(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[c]));
+  function loadInstances() {
+    if (state.loading) return;
+    var auth = authState();
+    if (!auth.apiKey) return;
+    state.loading = true;
+    request("/instance/all", {}, auth.apiKey)
+      .then(function (body) {
+        var list = Array.isArray(body) ? body : body.data || body.instances || [];
+        state.instances = list.map(normalizeInstance).filter(function (instance) {
+          return instance.id && instance.name;
+        });
+        injectButtons();
+      })
+      .catch(function (err) {
+        console.warn("[Chatwoot connector] failed to load instances:", err.message);
+      })
+      .finally(function () {
+        state.loading = false;
+      });
+  }
+
+  function findCard(instance) {
+    var nodes = Array.prototype.slice.call(document.querySelectorAll("main div, body div"));
+    var matches = nodes.filter(function (node) {
+      if (node.id === "cw-modal-root" || node.closest("#cw-modal-root")) return false;
+      var text = node.innerText || "";
+      return text.indexOf(instance.name) !== -1 && text.indexOf("Status") !== -1 && node.querySelectorAll("button").length >= 2;
+    });
+    matches.sort(function (a, b) {
+      return (a.innerText || "").length - (b.innerText || "").length;
+    });
+    return matches[0] || null;
+  }
+
+  function actionRow(card) {
+    var buttons = Array.prototype.slice.call(card.querySelectorAll("button"));
+    if (!buttons.length) return card;
+    var rows = buttons.map(function (button) {
+      return button.parentElement;
+    }).filter(Boolean);
+    rows.sort(function (a, b) {
+      return b.querySelectorAll("button").length - a.querySelectorAll("button").length;
+    });
+    return rows[0] || buttons[buttons.length - 1].parentElement || card;
+  }
+
+  function injectButtons() {
+    if (!/\/manager/.test(window.location.pathname)) return;
+    state.instances.forEach(function (instance) {
+      if (document.querySelector('[data-chatwoot-button-for="' + instance.id + '"]')) return;
+      var card = findCard(instance);
+      if (!card) return;
+      var row = actionRow(card);
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "cw-card-button";
+      button.dataset.chatwootButtonFor = instance.id;
+      button.title = "Configurar Chatwoot";
+      button.textContent = "Chatwoot";
+      button.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        openModal(instance);
+      });
+      row.appendChild(button);
+    });
+  }
+
+  function defaultSettings(instance) {
+    return {
+      enabled: false,
+      url: "https://app.melck.app",
+      accountId: "1",
+      accountToken: "",
+      inboxId: "",
+      inboxIdentifier: "",
+      webhookToken: instance.name,
+      hmacToken: "",
+      enableGroups: false,
+    };
+  }
+
+  function defaultAdvanced() {
+    return {
+      alwaysOnline: false,
+      rejectCall: false,
+      msgRejectCall: "",
+      readMessages: false,
+      ignoreGroups: false,
+      ignoreStatus: false,
+    };
+  }
+
+  function computedWebhook(instance, settings) {
+    var token = settings.webhookToken || instance.token || instance.name;
+    return window.location.origin.replace(/\/$/, "") + "/webhooks/chatwoot/" + encodeURIComponent(instance.name) + "/" + encodeURIComponent(token);
+  }
+
+  function root() {
+    var el = document.getElementById("cw-modal-root");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "cw-modal-root";
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   function openModal(instance) {
-    closeModal();
-    const auth = getAuth();
-    if (!auth) return;
+    state.current = instance;
+    state.settings = defaultSettings(instance);
+    state.advanced = defaultAdvanced();
+    state.webhookUrl = computedWebhook(instance, state.settings);
+    renderLoading(instance);
 
-    const overlay = document.createElement('div');
-    overlay.id = MODAL_ID;
-    overlay.className = 'cw-overlay';
-    overlay.addEventListener('click', e => {
-      if (e.target === overlay) closeModal();
-    });
-
-    overlay.innerHTML =
-      '<div class="cw-modal" role="dialog" aria-modal="true">' +
-      '<div class="cw-modal-header">' +
-      '<h2><img src="/assets/chatwoot-icon.png" alt="" />Chatwoot <small>· ' + escapeHtml(instance.name) + '</small></h2>' +
-      '<button class="cw-close" type="button" aria-label="Fechar">&times;</button>' +
-      '</div>' +
-      '<div class="cw-body"><div class="cw-loading">Carregando configurações...</div></div>' +
-      '</div>';
-
-    document.body.appendChild(overlay);
-    overlay.querySelector('.cw-close').addEventListener('click', closeModal);
-    document.addEventListener('keydown', escClose);
-
-    loadAndRender(overlay, instance, auth);
-  }
-
-  function escClose(e) {
-    if (e.key === 'Escape') closeModal();
+    Promise.all([
+      request("/instance/" + encodeURIComponent(instance.id) + "/chatwoot-settings", {}, instance.token),
+      request("/instance/" + encodeURIComponent(instance.id) + "/advanced-settings", {}, instance.token),
+    ])
+      .then(function (results) {
+        state.settings = Object.assign(defaultSettings(instance), results[0].settings || results[0] || {});
+        state.advanced = Object.assign(defaultAdvanced(), results[1] || {});
+        state.webhookUrl = results[0].webhookUrl || computedWebhook(instance, state.settings);
+        renderModal();
+      })
+      .catch(function (err) {
+        renderModal(err.message);
+      });
   }
 
   function closeModal() {
-    const m = document.getElementById(MODAL_ID);
-    if (m) m.remove();
-    document.removeEventListener('keydown', escClose);
+    root().innerHTML = "";
   }
 
-  async function loadAndRender(overlay, instance, auth) {
-    const body = overlay.querySelector('.cw-body');
-    try {
-      const res = await fetch(auth.apiUrl + '/instance/' + encodeURIComponent(instance.id) + '/chatwoot-settings', {
-        headers: { apikey: instance.token, 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        body.innerHTML = '<div class="cw-msg error">Erro ao carregar (' + res.status + '): ' + escapeHtml(txt) + '</div>';
-        return;
-      }
-      const data = await res.json();
-      renderForm(body, instance, auth, data.settings || {}, data.webhookUrl || '');
-    } catch (e) {
-      body.innerHTML = '<div class="cw-msg error">Erro: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</div>';
-    }
+  function renderLoading(instance) {
+    root().innerHTML = '<div class="cw-overlay"><div class="cw-modal"><div class="cw-header"><div class="cw-title">Chatwoot - ' + esc(instance.name) + '</div><button class="cw-close" type="button" data-cw-close>&times;</button></div><div class="cw-loading">Carregando configuracao...</div></div></div>';
+    root().querySelector("[data-cw-close]").addEventListener("click", closeModal);
   }
 
-  function renderForm(body, instance, auth, settings, webhookUrl) {
-    body.innerHTML =
-      '<label class="cw-toggle">' +
-      '<input type="checkbox" id="cw-enabled" ' + (settings.enabled ? 'checked' : '') + ' />' +
-      '<span>Habilitado</span>' +
-      '</label>' +
+  function renderModal(message, ok) {
+    var instance = state.current;
+    var s = state.settings || defaultSettings(instance);
+    var a = state.advanced || defaultAdvanced();
+    var webhook = computedWebhook(instance, s);
+    state.webhookUrl = webhook;
 
-      '<div class="cw-section-title">Webhook URL para o Inbox</div>' +
-      '<div class="cw-webhook">' +
-      '<input id="cw-webhook" readonly value="' + escapeHtml(webhookUrl) + '" />' +
-      '<button class="cw-btn cw-btn-copy" type="button" id="cw-copy">Copiar</button>' +
-      '</div>' +
+    root().innerHTML = ''
+      + '<div class="cw-overlay">'
+      + '<div class="cw-modal">'
+      + '<div class="cw-header"><div class="cw-title">Edit App</div><button class="cw-close" type="button" data-cw-close>&times;</button></div>'
+      + '<div class="cw-body">'
+      + (message ? '<div class="cw-alert ' + (ok ? 'ok' : 'error') + '">' + esc(message) + '</div>' : '')
+      + '<div class="cw-field"><label>App ID</label><input data-cw="appId" value="' + esc(instance.name) + '" disabled></div>'
+      + '<div class="cw-field"><label>App Type</label><select disabled><option>ChatWoot</option></select></div>'
+      + '<label class="cw-switch"><input data-cw="enabled" type="checkbox" ' + (s.enabled ? "checked" : "") + '> <span>Enabled</span></label>'
+      + '<div class="cw-section"><div class="cw-section-title">ChatWoot Inbox - Webhook URL</div>'
+      + '<div class="cw-field"><label>Use this Webhook URL for your ChatWoot Inbox:</label><div class="cw-row"><input data-cw="webhook" value="' + esc(webhook) + '" readonly><button class="cw-copy" type="button" data-cw-copy="webhook">Copy</button></div><div class="cw-help">Configure esta URL no Webhook da API Inbox do Chatwoot.</div></div>'
+      + '</div>'
+      + '<div class="cw-section"><div class="cw-section-title">Connection</div>'
+      + '<div class="cw-field"><label>ChatWoot URL</label><input data-cw="url" value="' + esc(s.url) + '" placeholder="https://app.melck.app"></div>'
+      + '<div class="cw-grid">'
+      + '<div class="cw-field"><label>Account ID</label><input data-cw="accountId" value="' + esc(s.accountId) + '"></div>'
+      + '<div class="cw-field"><label>Account Token</label><input data-cw="accountToken" type="password" value="' + esc(s.accountToken) + '"></div>'
+      + '<div class="cw-field"><label>Inbox ID</label><input data-cw="inboxId" value="' + esc(s.inboxId) + '"></div>'
+      + '<div class="cw-field"><label>Inbox Identifier</label><input data-cw="inboxIdentifier" type="password" value="' + esc(s.inboxIdentifier) + '"></div>'
+      + '</div>'
+      + '<div class="cw-grid">'
+      + '<div class="cw-field"><label>Webhook Token</label><input data-cw="webhookToken" value="' + esc(s.webhookToken) + '"></div>'
+      + '<div class="cw-field"><label>HMAC Token</label><input data-cw="hmacToken" type="password" value="' + esc(s.hmacToken) + '"></div>'
+      + '</div>'
+      + '</div>'
+      + '<div class="cw-section"><div class="cw-section-title">Conversations</div>'
+      + '<label class="cw-switch"><input data-cw="readMessages" type="checkbox" ' + (a.readMessages ? "checked" : "") + '> <span>Confirmacao de leitura no WhatsApp (riscos azuis)</span></label>'
+      + '<div class="cw-help">Quando ativado, mensagens recebidas no WhatsApp sao marcadas como lidas automaticamente pela instancia.</div>'
+      + '<label class="cw-switch"><input data-cw="enableGroups" type="checkbox" ' + (s.enableGroups ? "checked" : "") + '> <span>Sincronizar grupos</span></label>'
+      + '</div>'
+      + '</div>'
+      + '<div class="cw-footer"><button class="cw-cancel" type="button" data-cw-close>Cancel</button><button class="cw-save" type="button" data-cw-save>Save</button></div>'
+      + '</div></div>';
 
-      '<div class="cw-section-title">Conexão</div>' +
-      '<div class="cw-field">' +
-      '<label>URL do Chatwoot</label>' +
-      '<input id="cw-url" type="text" placeholder="https://app.chatwoot.com" value="' + escapeHtml(settings.url) + '" />' +
-      '</div>' +
-      '<div class="cw-row">' +
-      '<div class="cw-field">' +
-      '<label>Account ID</label>' +
-      '<input id="cw-accountId" type="text" placeholder="1" value="' + escapeHtml(settings.accountId) + '" />' +
-      '</div>' +
-      '<div class="cw-field">' +
-      '<label>Inbox ID</label>' +
-      '<input id="cw-inboxId" type="text" placeholder="ID do inbox" value="' + escapeHtml(settings.inboxId) + '" />' +
-      '</div>' +
-      '</div>' +
-      '<div class="cw-field">' +
-      '<label>Account Token (User API Key)</label>' +
-      '<input id="cw-accountToken" type="password" placeholder="Chatwoot user access token" value="' + escapeHtml(settings.accountToken) + '" />' +
-      '</div>' +
-      '<div class="cw-field">' +
-      '<label>Inbox Identifier</label>' +
-      '<input id="cw-inboxIdentifier" type="password" placeholder="Identifier da API Inbox" value="' + escapeHtml(settings.inboxIdentifier) + '" />' +
-      '</div>' +
-
-      '<div class="cw-section-title">Segurança (opcional)</div>' +
-      '<div class="cw-field">' +
-      '<label>Webhook Token (sobrescreve token da instância na URL)</label>' +
-      '<input id="cw-webhookToken" type="text" value="' + escapeHtml(settings.webhookToken) + '" />' +
-      '</div>' +
-      '<div class="cw-field">' +
-      '<label>HMAC Token (assina mensagens recebidas do Chatwoot)</label>' +
-      '<input id="cw-hmacToken" type="password" value="' + escapeHtml(settings.hmacToken) + '" />' +
-      '</div>' +
-
-      '<label class="cw-toggle" style="margin-top:8px;">' +
-      '<input type="checkbox" id="cw-enableGroups" ' + (settings.enableGroups ? 'checked' : '') + ' />' +
-      '<span>Sincronizar grupos do WhatsApp</span>' +
-      '</label>' +
-
-      '<div id="cw-msg" class="cw-msg"></div>' +
-
-      '<div class="cw-actions">' +
-      '<button class="cw-btn cw-btn-secondary" type="button" id="cw-cancel">Cancelar</button>' +
-      '<button class="cw-btn cw-btn-primary" type="button" id="cw-save">Salvar</button>' +
-      '</div>';
-
-    body.querySelector('#cw-copy').addEventListener('click', async () => {
-      const v = body.querySelector('#cw-webhook').value;
-      try {
-        await navigator.clipboard.writeText(v);
-        flash(body, 'Webhook copiado.', 'success');
-      } catch {
-        flash(body, 'Não foi possível copiar.', 'error');
-      }
+    Array.prototype.slice.call(root().querySelectorAll("[data-cw-close]")).forEach(function (button) {
+      button.addEventListener("click", closeModal);
     });
-    body.querySelector('#cw-cancel').addEventListener('click', closeModal);
-    body.querySelector('#cw-save').addEventListener('click', () => save(body, instance, auth));
+    root().querySelector("[data-cw-save]").addEventListener("click", saveModal);
+    root().querySelector("[data-cw-copy]").addEventListener("click", function () {
+      var input = root().querySelector('[data-cw="webhook"]');
+      navigator.clipboard.writeText(input.value);
+      renderModal("Webhook copiado.", true);
+    });
+    root().querySelector('[data-cw="webhookToken"]').addEventListener("input", function () {
+      var next = collectSettings();
+      root().querySelector('[data-cw="webhook"]').value = computedWebhook(instance, next);
+    });
   }
 
-  async function save(body, instance, auth) {
-    const enabled = body.querySelector('#cw-enabled').checked;
-    const payload = {
-      enabled,
-      url: body.querySelector('#cw-url').value.trim(),
-      accountId: body.querySelector('#cw-accountId').value.trim(),
-      accountToken: body.querySelector('#cw-accountToken').value.trim(),
-      inboxId: body.querySelector('#cw-inboxId').value.trim(),
-      inboxIdentifier: body.querySelector('#cw-inboxIdentifier').value.trim(),
-      webhookToken: body.querySelector('#cw-webhookToken').value.trim(),
-      hmacToken: body.querySelector('#cw-hmacToken').value.trim(),
-      enableGroups: body.querySelector('#cw-enableGroups').checked,
+  function value(name) {
+    var el = root().querySelector('[data-cw="' + name + '"]');
+    if (!el) return "";
+    return el.type === "checkbox" ? el.checked : el.value.trim();
+  }
+
+  function collectSettings() {
+    return {
+      enabled: !!value("enabled"),
+      url: value("url"),
+      accountId: value("accountId"),
+      accountToken: value("accountToken"),
+      inboxId: value("inboxId"),
+      inboxIdentifier: value("inboxIdentifier"),
+      webhookToken: value("webhookToken"),
+      hmacToken: value("hmacToken"),
+      enableGroups: !!value("enableGroups"),
     };
-
-    if (enabled && !payload.url) {
-      flash(body, 'URL do Chatwoot é obrigatória quando habilitado.', 'error');
-      return;
-    }
-    if (enabled && !payload.inboxIdentifier) {
-      flash(body, 'Inbox Identifier é obrigatório quando habilitado.', 'error');
-      return;
-    }
-
-    const saveBtn = body.querySelector('#cw-save');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Salvando...';
-    try {
-      const res = await fetch(auth.apiUrl + '/instance/' + encodeURIComponent(instance.id) + '/chatwoot-settings', {
-        method: 'PUT',
-        headers: { apikey: instance.token, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        flash(body, data.error || ('Erro ao salvar (' + res.status + ').'), 'error');
-        return;
-      }
-      if (data.webhookUrl) {
-        const w = body.querySelector('#cw-webhook');
-        if (w) w.value = data.webhookUrl;
-      }
-      flash(body, 'Configurações salvas.', 'success');
-      setTimeout(closeModal, 600);
-    } catch (e) {
-      flash(body, 'Erro: ' + (e && e.message ? e.message : String(e)), 'error');
-    } finally {
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Salvar';
-    }
   }
 
-  function flash(body, msg, type) {
-    const el = body.querySelector('#cw-msg');
-    if (!el) return;
-    el.className = 'cw-msg ' + type;
-    el.textContent = msg;
-    const stamp = msg;
-    setTimeout(() => {
-      if (el.textContent === stamp) {
-        el.textContent = '';
-        el.className = 'cw-msg';
-      }
-    }, 3500);
-  }
-
-  function start() {
-    injectStyles();
-    injectButtons();
-    setInterval(() => {
-      if (!document.hidden) injectButtons();
-    }, POLL_INTERVAL_MS);
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) injectButtons();
+  function saveModal() {
+    var instance = state.current;
+    var settings = collectSettings();
+    var advanced = Object.assign(defaultAdvanced(), state.advanced || {}, {
+      readMessages: !!value("readMessages"),
     });
+
+    if (settings.enabled && (!settings.url || !settings.inboxIdentifier)) {
+      renderModal("Informe ChatWoot URL e Inbox Identifier para ativar.", false);
+      return;
+    }
+
+    root().querySelector("[data-cw-save]").disabled = true;
+    Promise.all([
+      request("/instance/" + encodeURIComponent(instance.id) + "/chatwoot-settings", {
+        method: "PUT",
+        body: JSON.stringify(settings),
+      }, instance.token),
+      request("/instance/" + encodeURIComponent(instance.id) + "/advanced-settings", {
+        method: "PUT",
+        body: JSON.stringify(advanced),
+      }, instance.token),
+    ])
+      .then(function () {
+        state.settings = settings;
+        state.advanced = advanced;
+        renderModal("Configuracao salva com sucesso.", true);
+      })
+      .catch(function (err) {
+        renderModal(err.message, false);
+      });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
+  function boot() {
+    loadInstances();
+    injectButtons();
   }
+
+  var observer = new MutationObserver(function () {
+    injectButtons();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  window.addEventListener("storage", loadInstances);
+  window.addEventListener("popstate", boot);
+  setInterval(loadInstances, 15000);
+  setTimeout(boot, 700);
+  setTimeout(boot, 2000);
 })();

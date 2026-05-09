@@ -1053,7 +1053,10 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		// para que o recibo seja roteado corretamente pela whatsmeow.
 		if mycli.Instance.ReadMessages && !evt.Info.IsFromMe {
 			chatJID := evt.Info.Chat
-			senderJID := evt.Info.Sender
+			senderJID := types.EmptyJID
+			if strings.Contains(chatJID.String(), "@g.us") {
+				senderJID = evt.Info.Sender
+			}
 			msgID := evt.Info.ID
 			go func() {
 				time.Sleep(1 * time.Second)

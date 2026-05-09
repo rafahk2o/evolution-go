@@ -55,8 +55,9 @@ type ChatPresenceStruct struct {
 }
 
 type MarkReadStruct struct {
-	Id     []string `json:"id"`
-	Number string   `json:"number"`
+	Id          []string `json:"id"`
+	Number      string   `json:"number"`
+	Participant string   `json:"participant,omitempty"`
 }
 
 type DownloadMediaStruct struct {
@@ -249,7 +250,21 @@ func (m *messageService) MarkRead(data *MarkReadStruct, instance *instance_model
 		return "", errors.New("invalid phone number")
 	}
 
-	err = client.MarkRead(context.Background(), data.Id, time.Now(), jid, jid)
+	sender := types.EmptyJID
+	if strings.Contains(jid.String(), "@g.us") {
+		if strings.TrimSpace(data.Participant) == "" {
+			return "", errors.New("participant is required for group read receipts")
+		}
+
+		participant, ok := utils.ParseJID(data.Participant)
+		if !ok {
+			m.loggerWrapper.GetLogger(instance.Id).LogError("[%s] Error validating participant field", instance.Id)
+			return "", errors.New("invalid participant")
+		}
+		sender = participant
+	}
+
+	err = client.MarkRead(context.Background(), data.Id, time.Now(), jid, sender)
 	if err != nil {
 		m.loggerWrapper.GetLogger(instance.Id).LogError("[%s] error marking message as read: %v", instance.Id, err)
 		return "", errors.New("error marking message as read")
