@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,6 +25,8 @@ import (
 	call_service "github.com/EvolutionAPI/evolution-go/pkg/call/service"
 	chat_handler "github.com/EvolutionAPI/evolution-go/pkg/chat/handler"
 	chat_service "github.com/EvolutionAPI/evolution-go/pkg/chat/service"
+	chatwoot "github.com/EvolutionAPI/evolution-go/pkg/chatwoot"
+	chatwoot_handler "github.com/EvolutionAPI/evolution-go/pkg/chatwoot/handler"
 	community_handler "github.com/EvolutionAPI/evolution-go/pkg/community/handler"
 	community_service "github.com/EvolutionAPI/evolution-go/pkg/community/service"
 	config "github.com/EvolutionAPI/evolution-go/pkg/config"
@@ -130,6 +132,7 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 
 	webhookProducer := webhook_producer.NewWebhookProducer(config.WebhookUrl, loggerWrapper)
 	websocketProducer := websocket_producer.NewWebsocketProducer(loggerWrapper)
+	chatwootClient := chatwoot.NewClient(loggerWrapper)
 
 	// Cria filas globais se o RabbitMQ global estiver habilitado
 	if config.AmqpGlobalEnabled && conn != nil {
@@ -177,6 +180,7 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 		mediaStorage,
 		natsProducer,
 		loggerWrapper,
+		chatwootClient,
 	)
 	instanceService := instance_service.NewInstanceService(
 		instanceRepository,
@@ -195,6 +199,7 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 	communityService := community_service.NewCommunityService(clientPointer, whatsmeowService, loggerWrapper)
 	labelService := label_service.NewLabelService(clientPointer, whatsmeowService, labelRepository, loggerWrapper)
 	newsletterService := newsletter_service.NewNewsletterService(clientPointer, whatsmeowService, loggerWrapper)
+	chatwootHandler := chatwoot_handler.NewHandler(instanceRepository, sendMessageService)
 
 	// NOVO: PollHandler usando PollService já inicializado no whatsmeowService (evita dupla inicialização)
 	pollHandler := poll_handler.NewPollHandler(whatsmeowService.GetPollService(), loggerWrapper)
@@ -219,6 +224,8 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 
 	// License routes (always accessible, even without license)
 	core.LicenseRoutes(r, runtimeCtx)
+
+	r.POST("/webhooks/chatwoot/:instance/:token", chatwootHandler.Webhook)
 
 	routes.NewRouter(
 		auth_middleware.NewMiddleware(config, instanceService),

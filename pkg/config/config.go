@@ -68,7 +68,6 @@ type Config struct {
 	LogMaxAge     int
 	LogDirectory  string
 	LogCompress   bool
-
 }
 
 // EnsureDBExists connects to postgres (without the target database) and creates it if it doesn't exist.

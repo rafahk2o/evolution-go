@@ -2,6 +2,7 @@ package instance_handler
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,8 @@ type InstanceHandler interface {
 	GetLogs(ctx *gin.Context)
 	GetAdvancedSettings(ctx *gin.Context)
 	UpdateAdvancedSettings(ctx *gin.Context)
+	GetChatwootSettings(ctx *gin.Context)
+	UpdateChatwootSettings(ctx *gin.Context)
 }
 
 type instanceHandler struct {
@@ -639,6 +642,120 @@ func (h *instanceHandler) UpdateAdvancedSettings(c *gin.Context) {
 		"message":  "Advanced settings updated successfully",
 		"settings": settings,
 	})
+}
+
+// GetChatwootSettings retrieves Chatwoot API Inbox settings for an instance
+// @Summary Get Chatwoot settings
+// @Description Get Chatwoot API Inbox settings for a specific instance
+// @Tags Instance
+// @Produce json
+// @Param instanceId path string true "Instance ID"
+// @Success 200 {object} gin.H "Chatwoot settings retrieved successfully"
+// @Failure 400 {object} gin.H "Invalid instance ID"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /instance/{instanceId}/chatwoot-settings [get]
+func (h *instanceHandler) GetChatwootSettings(c *gin.Context) {
+	instanceId := c.Param("instanceId")
+
+	if instanceId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "instanceId is required"})
+		return
+	}
+
+	settings, err := h.instanceService.GetChatwootSettings(instanceId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	instance, err := h.instanceService.Info(instanceId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"settings":   settings,
+		"webhookUrl": h.buildChatwootWebhookURL(c, instance, settings),
+	})
+}
+
+// UpdateChatwootSettings updates Chatwoot API Inbox settings for an instance
+// @Summary Update Chatwoot settings
+// @Description Update Chatwoot API Inbox settings for a specific instance
+// @Tags Instance
+// @Accept json
+// @Produce json
+// @Param instanceId path string true "Instance ID"
+// @Param settings body instance_model.ChatwootSettings true "Chatwoot settings data"
+// @Success 200 {object} gin.H "Chatwoot settings updated successfully"
+// @Failure 400 {object} gin.H "Invalid request data"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /instance/{instanceId}/chatwoot-settings [put]
+func (h *instanceHandler) UpdateChatwootSettings(c *gin.Context) {
+	instanceId := c.Param("instanceId")
+
+	if instanceId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "instanceId is required"})
+		return
+	}
+
+	var settings instance_model.ChatwootSettings
+	if err := c.ShouldBindJSON(&settings); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if settings.Enabled {
+		if strings.TrimSpace(settings.URL) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "chatwoot url is required when enabled"})
+			return
+		}
+		if strings.TrimSpace(settings.InboxIdentifier) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "chatwoot inbox identifier is required when enabled"})
+			return
+		}
+	}
+
+	err := h.instanceService.UpdateChatwootSettings(instanceId, &settings)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	instance, err := h.instanceService.Info(instanceId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Chatwoot settings updated successfully",
+		"settings":   settings,
+		"webhookUrl": h.buildChatwootWebhookURL(c, instance, &settings),
+	})
+}
+
+func (h *instanceHandler) buildChatwootWebhookURL(c *gin.Context, instance *instance_model.Instance, settings *instance_model.ChatwootSettings) string {
+	scheme := c.GetHeader("X-Forwarded-Proto")
+	if scheme == "" {
+		scheme = "http"
+		if c.Request.TLS != nil {
+			scheme = "https"
+		}
+	}
+
+	host := c.GetHeader("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request.Host
+	}
+
+	token := settings.WebhookToken
+	if token == "" {
+		token = instance.Token
+	}
+
+	return strings.TrimRight(scheme+"://"+host, "/") + "/webhooks/chatwoot/" + instance.Name + "/" + token
 }
 
 func NewInstanceHandler(instanceService instance_service.InstanceService, config *config.Config) InstanceHandler {

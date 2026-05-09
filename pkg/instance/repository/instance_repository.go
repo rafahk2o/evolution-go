@@ -32,6 +32,8 @@ type InstanceRepository interface {
 	Delete(instanceId string) error
 	GetAdvancedSettings(instanceId string) (*instance_model.AdvancedSettings, error)
 	UpdateAdvancedSettings(instanceId string, settings *instance_model.AdvancedSettings) error
+	GetChatwootSettings(instanceId string) (*instance_model.ChatwootSettings, error)
+	UpdateChatwootSettings(instanceId string, settings *instance_model.ChatwootSettings) error
 }
 
 type instanceRepository struct {
@@ -210,6 +212,57 @@ func (i *instanceRepository) UpdateAdvancedSettings(instanceId string, settings 
 	err := i.db.Model(&instance_model.Instance{}).Where("id = ?", instanceId).Updates(updates).Error
 	if err != nil {
 		logger.LogError("Error updating advanced settings in DB: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (i *instanceRepository) GetChatwootSettings(instanceId string) (*instance_model.ChatwootSettings, error) {
+	if _, err := uuid.Parse(instanceId); err != nil {
+		return nil, fmt.Errorf("invalid UUID format: %v", err)
+	}
+
+	var instance instance_model.Instance
+	err := i.db.Select("chatwoot_enabled, chatwoot_url, chatwoot_account_id, chatwoot_account_token, chatwoot_inbox_id, chatwoot_inbox_identifier, chatwoot_webhook_token, chatwoot_hmac_token, chatwoot_enable_groups").
+		Where("id = ?", instanceId).First(&instance).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &instance_model.ChatwootSettings{
+		Enabled:         instance.ChatwootEnabled,
+		URL:             instance.ChatwootURL,
+		AccountID:       instance.ChatwootAccountID,
+		AccountToken:    instance.ChatwootAccountToken,
+		InboxID:         instance.ChatwootInboxID,
+		InboxIdentifier: instance.ChatwootInboxIdentifier,
+		WebhookToken:    instance.ChatwootWebhookToken,
+		HMACToken:       instance.ChatwootHMACToken,
+		EnableGroups:    instance.ChatwootEnableGroups,
+	}, nil
+}
+
+func (i *instanceRepository) UpdateChatwootSettings(instanceId string, settings *instance_model.ChatwootSettings) error {
+	if _, err := uuid.Parse(instanceId); err != nil {
+		return fmt.Errorf("invalid UUID format: %v", err)
+	}
+
+	updates := map[string]interface{}{
+		"chatwoot_enabled":          settings.Enabled,
+		"chatwoot_url":              settings.URL,
+		"chatwoot_account_id":       settings.AccountID,
+		"chatwoot_account_token":    settings.AccountToken,
+		"chatwoot_inbox_id":         settings.InboxID,
+		"chatwoot_inbox_identifier": settings.InboxIdentifier,
+		"chatwoot_webhook_token":    settings.WebhookToken,
+		"chatwoot_hmac_token":       settings.HMACToken,
+		"chatwoot_enable_groups":    settings.EnableGroups,
+	}
+
+	err := i.db.Model(&instance_model.Instance{}).Where("id = ?", instanceId).Updates(updates).Error
+	if err != nil {
+		logger.LogError("Error updating chatwoot settings in DB: %v", err)
 		return err
 	}
 

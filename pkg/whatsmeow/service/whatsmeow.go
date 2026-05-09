@@ -34,6 +34,7 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
+	chatwoot "github.com/EvolutionAPI/evolution-go/pkg/chatwoot"
 	"github.com/EvolutionAPI/evolution-go/pkg/config"
 	producer_interfaces "github.com/EvolutionAPI/evolution-go/pkg/events/interfaces"
 	instance_model "github.com/EvolutionAPI/evolution-go/pkg/instance/model"
@@ -89,6 +90,7 @@ type whatsmeowService struct {
 	processedMessages  *cache.Cache
 	natsProducer       producer_interfaces.Producer
 	loggerWrapper      *logger_wrapper.LoggerManager
+	chatwootClient     *chatwoot.Client
 }
 
 type MyClient struct {
@@ -2143,6 +2145,14 @@ func contains(subscriptions []string, event string) bool {
 }
 
 func (w *whatsmeowService) sendToQueueOrWebhook(instance *instance_model.Instance, queueName string, jsonData []byte) {
+	if w.chatwootClient != nil && w.chatwootClient.Enabled(instance) {
+		go func() {
+			if err := w.chatwootClient.ForwardEvolutionEvent(instance, jsonData); err != nil {
+				w.loggerWrapper.GetLogger(instance.Id).LogError("[%s] Failed to sync message to Chatwoot: %v", instance.Id, err)
+			}
+		}()
+	}
+
 	if instance.RabbitmqEnable == "enabled" || instance.RabbitmqEnable == "true" {
 		err := w.rabbitmqProducer.Produce(queueName, jsonData, instance.RabbitmqEnable, instance.Id)
 		if err != nil {
@@ -2662,6 +2672,7 @@ func NewWhatsmeowService(
 	mediaStorage storage_interfaces.MediaStorage,
 	natsProducer producer_interfaces.Producer,
 	loggerWrapper *logger_wrapper.LoggerManager,
+	chatwootClient *chatwoot.Client,
 ) WhatsmeowService {
 	// Inicializar PollService de forma segura
 	pollSvc := poll_service.NewPollService(authDB, loggerWrapper)
@@ -2686,6 +2697,7 @@ func NewWhatsmeowService(
 		processedMessages:  cache.New(30*time.Minute, 1*time.Hour),
 		natsProducer:       natsProducer,
 		loggerWrapper:      loggerWrapper,
+		chatwootClient:     chatwootClient,
 	}
 }
 

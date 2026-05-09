@@ -44,6 +44,8 @@ type InstanceService interface {
 	GetLogs(instanceId string, startDate, endDate time.Time, level string, limit int) ([]logger_wrapper.LogEntry, error)
 	GetAdvancedSettings(instanceId string) (*instance_model.AdvancedSettings, error)
 	UpdateAdvancedSettings(instanceId string, settings *instance_model.AdvancedSettings) error
+	GetChatwootSettings(instanceId string) (*instance_model.ChatwootSettings, error)
+	UpdateChatwootSettings(instanceId string, settings *instance_model.ChatwootSettings) error
 }
 
 type instances struct {
@@ -69,6 +71,7 @@ type CreateStruct struct {
 	Token            string                           `json:"token"`
 	Proxy            *ProxyConfig                     `json:"proxy"`
 	AdvancedSettings *instance_model.AdvancedSettings `json:"advancedSettings"`
+	ChatwootSettings *instance_model.ChatwootSettings `json:"chatwootSettings"`
 }
 
 type ConnectStruct struct {
@@ -188,6 +191,10 @@ func (i instances) Create(data *CreateStruct) (*instance_model.Instance, error) 
 		instance.ReadMessages = data.AdvancedSettings.ReadMessages
 		instance.IgnoreGroups = data.AdvancedSettings.IgnoreGroups
 		instance.IgnoreStatus = data.AdvancedSettings.IgnoreStatus
+	}
+
+	if data.ChatwootSettings != nil {
+		applyChatwootSettings(&instance, data.ChatwootSettings)
 	}
 
 	createdInstance, err := i.instanceRepository.Create(instance)
@@ -843,6 +850,48 @@ func (i instances) UpdateAdvancedSettings(instanceId string, settings *instance_
 
 	i.loggerWrapper.GetLogger(instanceId).LogInfo("[%s] Advanced settings updated successfully", instanceId)
 	return nil
+}
+
+func (i instances) GetChatwootSettings(instanceId string) (*instance_model.ChatwootSettings, error) {
+	i.loggerWrapper.GetLogger(instanceId).LogInfo("[%s] Getting Chatwoot settings", instanceId)
+
+	settings, err := i.instanceRepository.GetChatwootSettings(instanceId)
+	if err != nil {
+		i.loggerWrapper.GetLogger(instanceId).LogError("[%s] Error getting Chatwoot settings: %v", instanceId, err)
+		return nil, err
+	}
+
+	return settings, nil
+}
+
+func (i instances) UpdateChatwootSettings(instanceId string, settings *instance_model.ChatwootSettings) error {
+	i.loggerWrapper.GetLogger(instanceId).LogInfo("[%s] Updating Chatwoot settings", instanceId)
+
+	err := i.instanceRepository.UpdateChatwootSettings(instanceId, settings)
+	if err != nil {
+		i.loggerWrapper.GetLogger(instanceId).LogError("[%s] Error updating Chatwoot settings: %v", instanceId, err)
+		return err
+	}
+
+	err = i.whatsmeowService.UpdateInstanceSettings(instanceId)
+	if err != nil {
+		i.loggerWrapper.GetLogger(instanceId).LogWarn("[%s] Error syncing Chatwoot settings to runtime: %v", instanceId, err)
+	}
+
+	i.loggerWrapper.GetLogger(instanceId).LogInfo("[%s] Chatwoot settings updated successfully", instanceId)
+	return nil
+}
+
+func applyChatwootSettings(instance *instance_model.Instance, settings *instance_model.ChatwootSettings) {
+	instance.ChatwootEnabled = settings.Enabled
+	instance.ChatwootURL = settings.URL
+	instance.ChatwootAccountID = settings.AccountID
+	instance.ChatwootAccountToken = settings.AccountToken
+	instance.ChatwootInboxID = settings.InboxID
+	instance.ChatwootInboxIdentifier = settings.InboxIdentifier
+	instance.ChatwootWebhookToken = settings.WebhookToken
+	instance.ChatwootHMACToken = settings.HMACToken
+	instance.ChatwootEnableGroups = settings.EnableGroups
 }
 
 func NewInstanceService(
