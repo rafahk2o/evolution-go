@@ -13,6 +13,7 @@
   var css = ""
     + ".cw-chatwoot-card{position:relative;}"
     + ".cw-card-button{position:absolute;right:18px;bottom:18px;z-index:5;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 12px;border:1px solid rgba(37,211,102,.35);border-radius:6px;background:rgba(17,24,39,.94);color:#25d366;font-weight:700;font-size:13px;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease,background .15s ease,border-color .15s ease;}"
+    + ".cw-card-button img{width:18px;height:18px;object-fit:contain;}"
     + ".cw-chatwoot-card:hover .cw-card-button,.cw-chatwoot-card:focus-within .cw-card-button{opacity:1;pointer-events:auto;transform:translateY(0);}"
     + ".cw-card-button:hover{background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.65);}"
     + ".cw-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:16px;}"
@@ -113,11 +114,14 @@
       if (node.id === "cw-modal-root" || node.closest("#cw-modal-root")) return false;
       var rect = node.getBoundingClientRect();
       if (rect.width < 180 || rect.height < 120) return false;
+      if (rect.width > 640 || rect.height > 520) return false;
       var text = node.innerText || "";
       return text.indexOf(instance.name) !== -1 && text.indexOf("Status") !== -1;
     });
     matches.sort(function (a, b) {
-      return (a.innerText || "").length - (b.innerText || "").length;
+      var ar = a.getBoundingClientRect();
+      var br = b.getBoundingClientRect();
+      return (ar.width * ar.height) - (br.width * br.height);
     });
     return matches[0] || null;
   }
@@ -137,22 +141,26 @@
   function injectButtons() {
     if (!/\/manager/.test(window.location.pathname)) return;
     state.instances.forEach(function (instance) {
-      if (document.querySelector('[data-chatwoot-button-for="' + instance.id + '"]')) return;
       var card = findCard(instance);
       if (!card) return;
       card.classList.add("cw-chatwoot-card");
-      var button = document.createElement("button");
-      button.type = "button";
-      button.className = "cw-card-button";
-      button.dataset.chatwootButtonFor = instance.id;
-      button.title = "Configurar Chatwoot";
-      button.textContent = "Chatwoot";
-      button.addEventListener("click", function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        openModal(instance);
-      });
-      card.appendChild(button);
+      var button = document.querySelector('[data-chatwoot-button-for="' + instance.id + '"]');
+      if (!button) {
+        button = document.createElement("button");
+        button.type = "button";
+        button.className = "cw-card-button";
+        button.dataset.chatwootButtonFor = instance.id;
+        button.title = "Configurar Chatwoot";
+        button.innerHTML = '<img src="/assets/chatwoot-icon.png" alt=""> <span>Chatwoot</span>';
+        button.addEventListener("click", function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          openModal(instance);
+        });
+      }
+      if (button.parentElement !== card) {
+        card.appendChild(button);
+      }
     });
   }
 
@@ -337,7 +345,8 @@
       .then(function () {
         state.settings = settings;
         state.advanced = advanced;
-        renderModal("Configuracao salva com sucesso.", true);
+        closeModal();
+        loadInstances();
       })
       .catch(function (err) {
         renderModal(err.message, false);
