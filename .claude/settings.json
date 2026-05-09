@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk 'NR==305 || NR==395 {for\\(i=1;i<=length\\($0\\);i+=200\\){print substr\\($0,i,200\\)}; exit_after=NR==395; if\\(exit_after\\)exit}' \"c:/dev/evolution-go/manager/dist/assets/index-Dx4-byTC.js\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const s=fs.readFileSync\\('c:/dev/evolution-go/manager/dist/assets/index-Dx4-byTC.js','utf8'\\);const matches=s.match\\(/\\\\\"[A-ZÁÊÇa-záêç ]{3,40}\\\\\"/g\\)||[];const u=[...new Set\\(matches\\)];u.forEach\\(x=>console.log\\(x\\)\\)\")",
+      "Bash(findstr /R /C:\"Conectar\" /C:\"Conexão\" /C:\"QR\" /C:\"Logout\" /C:\"Desconectar\" /C:\"Editar\" /C:\"Webhook\" /C:\"Chatwoot\" /C:\"Configura\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const s=fs.readFileSync\\('c:/dev/evolution-go/manager/dist/assets/index-Dx4-byTC.js','utf8'\\);const matches=s.match\\(/\\\\\"[A-ZÁÊÇa-záêç çÇ ãõéíóúÉÍÓÚãÃõÕêÊâÂîÎôÔûÛ]{3,40}\\\\\"/g\\)||[];const set=new Set\\(matches\\);const arr=[...set].filter\\(x=>/Conec|QR|Logout|Desconect|Editar|Webhook|Chatwoot|Conf|Inst|Status|Conex/i.test\\(x\\)\\);arr.forEach\\(x=>console.log\\(x\\)\\)\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const s=fs.readFileSync\\('c:/dev/evolution-go/manager/dist/assets/index-Dx4-byTC.js','utf8'\\);const re=/\\\\\"Conectar\\\\\"/g;let m,positions=[];while\\(\\(m=re.exec\\(s\\)\\)!==null\\){positions.push\\(m.index\\)}console.log\\('positions',positions\\);positions.slice\\(0,3\\).forEach\\(p=>{console.log\\('---'\\);console.log\\(s.slice\\(Math.max\\(0,p-300\\),p+300\\)\\);}\\)\")"
+    ]
+  }
+}
