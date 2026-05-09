@@ -11,8 +11,10 @@
   };
 
   var css = ""
-    + ".cw-card-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 12px;border:0;border-left:1px solid rgba(255,255,255,.08);background:transparent;color:#25d366;font-weight:700;font-size:14px;cursor:pointer;}"
-    + ".cw-card-button:hover{background:rgba(37,211,102,.1);}"
+    + ".cw-chatwoot-card{position:relative;}"
+    + ".cw-card-button{position:absolute;right:18px;bottom:18px;z-index:5;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 12px;border:1px solid rgba(37,211,102,.35);border-radius:6px;background:rgba(17,24,39,.94);color:#25d366;font-weight:700;font-size:13px;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease,background .15s ease,border-color .15s ease;}"
+    + ".cw-chatwoot-card:hover .cw-card-button,.cw-chatwoot-card:focus-within .cw-card-button{opacity:1;pointer-events:auto;transform:translateY(0);}"
+    + ".cw-card-button:hover{background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.65);}"
     + ".cw-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:16px;}"
     + ".cw-modal{width:min(620px,100%);max-height:92vh;overflow:auto;background:#111827;border:1px solid #334155;border-radius:8px;color:#e5e7eb;box-shadow:0 24px 80px rgba(0,0,0,.55);}"
     + ".cw-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #263241;position:sticky;top:0;background:#111827;z-index:1;}"
@@ -109,8 +111,10 @@
     var nodes = Array.prototype.slice.call(document.querySelectorAll("main div, body div"));
     var matches = nodes.filter(function (node) {
       if (node.id === "cw-modal-root" || node.closest("#cw-modal-root")) return false;
+      var rect = node.getBoundingClientRect();
+      if (rect.width < 180 || rect.height < 120) return false;
       var text = node.innerText || "";
-      return text.indexOf(instance.name) !== -1 && text.indexOf("Status") !== -1 && node.querySelectorAll("button").length >= 2;
+      return text.indexOf(instance.name) !== -1 && text.indexOf("Status") !== -1;
     });
     matches.sort(function (a, b) {
       return (a.innerText || "").length - (b.innerText || "").length;
@@ -136,7 +140,7 @@
       if (document.querySelector('[data-chatwoot-button-for="' + instance.id + '"]')) return;
       var card = findCard(instance);
       if (!card) return;
-      var row = actionRow(card);
+      card.classList.add("cw-chatwoot-card");
       var button = document.createElement("button");
       button.type = "button";
       button.className = "cw-card-button";
@@ -148,7 +152,7 @@
         event.stopPropagation();
         openModal(instance);
       });
-      row.appendChild(button);
+      card.appendChild(button);
     });
   }
 
