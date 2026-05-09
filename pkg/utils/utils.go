@@ -340,15 +340,44 @@ func TimestampToUnixInt(timestamp string) (int64, error) {
 }
 
 func GenerateVC(data VCardStruct) string {
-	result := `
-BEGIN:VCARD
-VERSION:3.0
-FN:` + data.FullName + `
-ORG:` + data.Organization + `;
-TEL;type=CELL;type=VOICE;waid=` + data.Phone + `:` + data.Phone + `
-END:VCARD`
+	digits := stripNonDigits(data.Phone)
+	display := strings.TrimSpace(data.Phone)
+	if display == "" {
+		display = digits
+	}
+	if digits != "" && !strings.HasPrefix(display, "+") {
+		display = "+" + digits
+	}
+	if digits == "" {
+		digits = display
+	}
 
-	return result
+	fullName := strings.TrimSpace(data.FullName)
+	org := strings.TrimSpace(data.Organization)
+
+	var b strings.Builder
+	b.WriteString("BEGIN:VCARD\r\n")
+	b.WriteString("VERSION:3.0\r\n")
+	b.WriteString("N:;" + fullName + ";;;\r\n")
+	b.WriteString("FN:" + fullName + "\r\n")
+	if org != "" {
+		b.WriteString("ORG:" + org + "\r\n")
+	}
+	b.WriteString("TEL;type=CELL;type=VOICE;waid=" + digits + ":" + display + "\r\n")
+	b.WriteString("END:VCARD")
+
+	return b.String()
+}
+
+func stripNonDigits(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func GetObject(message []byte, keyFind string) string {
