@@ -353,6 +353,13 @@ func (c *Client) extractIncomingMessage(instance *instance_model.Instance, paylo
 		attachment = c.resolveAttachment(instance, media)
 	}
 
+	if attachment == nil && strings.TrimSpace(content) == "" {
+		if contacts := extractContacts(data); len(contacts) > 0 {
+			content = formatContactsText(contacts)
+			attachment = vcardsAttachment(contacts)
+		}
+	}
+
 	if strings.TrimSpace(content) == "" && attachment == nil {
 		if hasMediaSubtype(data) {
 			content = "[Mídia recebida, mas não foi possível baixá-la]"
@@ -534,6 +541,144 @@ func hasMediaSubtype(data map[string]interface{}) bool {
 		}
 	}
 	return false
+}
+
+type contactInfo struct {
+	DisplayName string
+	Phone       string
+	Vcard       string
+}
+
+var (
+	vcardWaidRegex = regexp.MustCompile(`(?i)waid=([0-9]+)`)
+	vcardTelRegex  = regexp.MustCompile(`(?im)^TEL[^:\r\n]*:([^\r\n]+)`)
+)
+
+func extractContacts(data map[string]interface{}) []contactInfo {
+	message := messageMapOf(data)
+	if message == nil {
+		return nil
+	}
+
+	var out []contactInfo
+
+	if cm, ok := message["contactMessage"].(map[string]interface{}); ok && cm != nil {
+		if c := buildContactInfo(cm); c != nil {
+			out = append(out, *c)
+		}
+	}
+
+	if cam, ok := message["contactsArrayMessage"].(map[string]interface{}); ok && cam != nil {
+		items, _ := firstValue(cam, "contacts", "Contacts").([]interface{})
+		for _, it := range items {
+			if cm, ok := it.(map[string]interface{}); ok {
+				if c := buildContactInfo(cm); c != nil {
+					out = append(out, *c)
+				}
+			}
+		}
+	}
+
+	return out
+}
+
+func buildContactInfo(cm map[string]interface{}) *contactInfo {
+	name := strings.TrimSpace(firstString(cm, "displayName", "DisplayName"))
+	vcard := firstString(cm, "vcard", "Vcard")
+	if name == "" && vcard == "" {
+		return nil
+	}
+	phone := parsePhoneFromVcard(vcard)
+	if name == "" {
+		name = phone
+	}
+	return &contactInfo{
+		DisplayName: name,
+		Phone:       phone,
+		Vcard:       vcard,
+	}
+}
+
+func parsePhoneFromVcard(vcard string) string {
+	if vcard == "" {
+		return ""
+	}
+	if m := vcardWaidRegex.FindStringSubmatch(vcard); len(m) > 1 {
+		return "+" + m[1]
+	}
+	if m := vcardTelRegex.FindStringSubmatch(vcard); len(m) > 1 {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
+func formatContactsText(cs []contactInfo) string {
+	if len(cs) == 0 {
+		return ""
+	}
+	if len(cs) == 1 {
+		c := cs[0]
+		if c.Phone != "" {
+			return "📇 Contato: " + c.DisplayName + "\n" + c.Phone
+		}
+		return "📇 Contato: " + c.DisplayName
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "📇 %d contatos compartilhados:", len(cs))
+	for _, c := range cs {
+		if c.Phone != "" {
+			fmt.Fprintf(&b, "\n• %s — %s", c.DisplayName, c.Phone)
+		} else {
+			fmt.Fprintf(&b, "\n• %s", c.DisplayName)
+		}
+	}
+	return b.String()
+}
+
+func vcardsAttachment(cs []contactInfo) *Attachment {
+	var b strings.Builder
+	for _, c := range cs {
+		v := strings.TrimSpace(c.Vcard)
+		if v == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteString("\r\n")
+		}
+		b.WriteString(v)
+	}
+	if b.Len() == 0 {
+		return nil
+	}
+
+	name := "contato.vcf"
+	if len(cs) > 1 {
+		name = "contatos.vcf"
+	} else if len(cs) == 1 && cs[0].DisplayName != "" {
+		if sanitized := sanitizeContactFilename(cs[0].DisplayName); sanitized != "" {
+			name = sanitized + ".vcf"
+		}
+	}
+
+	return &Attachment{
+		Data:     []byte(b.String()),
+		Filename: name,
+		Mimetype: "text/vcard",
+	}
+}
+
+func sanitizeContactFilename(s string) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(s) {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '-' || r == '_' || r == ' ':
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func messageMapOf(data map[string]interface{}) map[string]interface{} {
