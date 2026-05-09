@@ -447,6 +447,7 @@
         if (w) w.value = data.webhookUrl;
       }
       flash(body, 'Configurações salvas.', 'success');
+      setTimeout(closeModal, 600);
     } catch (e) {
       flash(body, 'Erro: ' + (e && e.message ? e.message : String(e)), 'error');
     } finally {
