@@ -18,28 +18,28 @@
     style.textContent = `
       .cw-card-btn {
         position: absolute;
-        top: 6px;
+        top: 8px;
         right: 10px;
         z-index: 5;
         background: rgba(45, 154, 211, 0.18);
         color: #2d9ad3;
         border: 1px solid rgba(45, 154, 211, 0.5);
-        border-radius: 5px;
-        padding: 3px 9px 3px 5px;
-        font-size: 11px;
+        border-radius: 7px;
+        padding: 4px 12px 4px 6px;
+        font-size: 13px;
         font-weight: 600;
         letter-spacing: 0.02em;
         cursor: pointer;
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
         line-height: 1.4;
         contain: layout paint;
         transition: background 0.15s ease;
       }
       .cw-card-btn:hover { background: rgba(45, 154, 211, 0.35); }
       .cw-card-btn svg, .cw-card-btn img { display: block; }
-      .cw-card-btn img { width: 16px; height: 16px; border-radius: 50%; }
+      .cw-card-btn img { width: 22px; height: 22px; border-radius: 50%; }
 
       .cw-overlay {
         position: fixed; inset: 0;
