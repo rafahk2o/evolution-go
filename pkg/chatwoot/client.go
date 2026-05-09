@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -22,15 +25,31 @@ import (
 
 type Client struct {
 	httpClient    *http.Client
+	mediaClient   *http.Client
 	loggerWrapper *logger_wrapper.LoggerManager
 }
 
+type Attachment struct {
+	Data     []byte
+	Filename string
+	Mimetype string
+}
+
 type IncomingMessage struct {
-	SourceID string
-	Phone    string
-	Name     string
-	Content  string
-	EchoID   string
+	SourceID   string
+	Phone      string
+	Name       string
+	Content    string
+	EchoID     string
+	Attachment *Attachment
+}
+
+type mediaInfo struct {
+	URL      string
+	Base64   string
+	Mimetype string
+	Filename string
+	Kind     string
 }
 
 type conversationResponse struct {
@@ -42,6 +61,9 @@ func NewClient(loggerWrapper *logger_wrapper.LoggerManager) *Client {
 	return &Client{
 		httpClient: &http.Client{
 			Timeout: 20 * time.Second,
+		},
+		mediaClient: &http.Client{
+			Timeout: 60 * time.Second,
 		},
 		loggerWrapper: loggerWrapper,
 	}
@@ -61,7 +83,7 @@ func (c *Client) ForwardEvolutionEvent(instance *instance_model.Instance, payloa
 	}
 
 	settings := settingsFromInstance(instance)
-	message, err := extractIncomingMessage(payload, settings.EnableGroups)
+	message, err := c.extractIncomingMessage(instance, payload, settings.EnableGroups)
 	if err != nil {
 		return err
 	}
@@ -82,7 +104,7 @@ func (c *Client) ForwardEvolutionEvent(instance *instance_model.Instance, payloa
 		return err
 	}
 
-	c.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Chatwoot incoming message synced - source: %s conversation: %d", instance.Id, message.SourceID, conversationID)
+	c.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Chatwoot incoming message synced - source: %s conversation: %d hasAttachment=%v", instance.Id, message.SourceID, conversationID, message.Attachment != nil)
 	return nil
 }
 
@@ -149,12 +171,74 @@ func (c *Client) createIncomingMessage(settings *instance_model.ChatwootSettings
 		conversationID,
 	)
 
+	if message.Attachment != nil {
+		return c.postMultipartMessage(settings, path, message)
+	}
+
 	body := map[string]string{
 		"content": message.Content,
 		"echo_id": message.EchoID,
 	}
 	_, err := c.doJSON(settings, http.MethodPost, path, body)
 	return err
+}
+
+func (c *Client) postMultipartMessage(settings *instance_model.ChatwootSettings, path string, message *IncomingMessage) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+
+	if message.Content != "" {
+		if err := mw.WriteField("content", message.Content); err != nil {
+			return err
+		}
+	}
+	if message.EchoID != "" {
+		_ = mw.WriteField("echo_id", message.EchoID)
+	}
+
+	header := make(textproto.MIMEHeader)
+	filename := message.Attachment.Filename
+	if filename == "" {
+		filename = "file"
+	}
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="attachments[]"; filename="%s"`, escapeMultipartQuotes(filename)))
+	if message.Attachment.Mimetype != "" {
+		header.Set("Content-Type", message.Attachment.Mimetype)
+	} else {
+		header.Set("Content-Type", "application/octet-stream")
+	}
+	part, err := mw.CreatePart(header)
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write(message.Attachment.Data); err != nil {
+		return err
+	}
+	if err := mw.Close(); err != nil {
+		return err
+	}
+
+	base := strings.TrimRight(settings.URL, "/")
+	req, err := http.NewRequest(http.MethodPost, base+path, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	if settings.AccountToken != "" {
+		req.Header.Set("api_access_token", settings.AccountToken)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("chatwoot multipart message failed with status %s: %s", resp.Status, string(respBody))
+	}
+	return nil
 }
 
 func (c *Client) doJSON(settings *instance_model.ChatwootSettings, method, path string, body interface{}) ([]byte, error) {
@@ -216,7 +300,7 @@ func settingsFromInstance(instance *instance_model.Instance) *instance_model.Cha
 	}
 }
 
-func extractIncomingMessage(payload []byte, enableGroups bool) (*IncomingMessage, error) {
+func (c *Client) extractIncomingMessage(instance *instance_model.Instance, payload []byte, enableGroups bool) (*IncomingMessage, error) {
 	var event map[string]interface{}
 	if err := json.Unmarshal(payload, &event); err != nil {
 		return nil, err
@@ -262,8 +346,19 @@ func extractIncomingMessage(payload []byte, enableGroups bool) (*IncomingMessage
 	}
 
 	content := extractContent(data)
-	if strings.TrimSpace(content) == "" {
-		return nil, nil
+	media := extractMediaInfo(data, info)
+
+	var attachment *Attachment
+	if media != nil {
+		attachment = c.resolveAttachment(instance, media)
+	}
+
+	if strings.TrimSpace(content) == "" && attachment == nil {
+		if hasMediaSubtype(data) {
+			content = "[Mídia recebida, mas não foi possível baixá-la]"
+		} else {
+			return nil, nil
+		}
 	}
 
 	name := firstString(data, "PushName", "pushName")
@@ -274,71 +369,243 @@ func extractIncomingMessage(payload []byte, enableGroups bool) (*IncomingMessage
 	echoID := firstString(info, "ID", "id")
 
 	return &IncomingMessage{
-		SourceID: phoneDigits,
-		Phone:    "+" + phoneDigits,
-		Name:     name,
-		Content:  content,
-		EchoID:   echoID,
+		SourceID:   phoneDigits,
+		Phone:      "+" + phoneDigits,
+		Name:       name,
+		Content:    content,
+		EchoID:     echoID,
+		Attachment: attachment,
 	}, nil
 }
 
-func extractContent(data map[string]interface{}) string {
-	message, _ := data["Message"].(map[string]interface{})
-	if message == nil {
-		message, _ = data["message"].(map[string]interface{})
+func (c *Client) resolveAttachment(instance *instance_model.Instance, info *mediaInfo) *Attachment {
+	if info == nil {
+		return nil
 	}
+	var (
+		data []byte
+		err  error
+	)
+	switch {
+	case info.Base64 != "":
+		data, err = base64.StdEncoding.DecodeString(info.Base64)
+	case info.URL != "":
+		data, err = c.downloadMedia(info.URL)
+	default:
+		return nil
+	}
+	if err != nil {
+		instanceID := ""
+		if instance != nil {
+			instanceID = instance.Id
+		}
+		c.loggerWrapper.GetLogger(instanceID).LogError("[%s] chatwoot: failed to resolve attachment: %v", instanceID, err)
+		return nil
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	return &Attachment{
+		Data:     data,
+		Filename: info.Filename,
+		Mimetype: info.Mimetype,
+	}
+}
+
+func (c *Client) downloadMedia(rawURL string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.mediaClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("download %s failed: %s", rawURL, resp.Status)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+func extractContent(data map[string]interface{}) string {
+	message := messageMapOf(data)
 	if message == nil {
 		return ""
 	}
 
-	if text := stringValue(firstValue(message, "conversation")); text != "" {
+	if text := stringValue(message["conversation"]); text != "" {
 		return text
 	}
-	if mediaURL := stringValue(message["mediaUrl"]); mediaURL != "" {
-		if mimetype := stringValue(message["mimetype"]); mimetype != "" {
-			return "[" + mimetype + "] " + mediaURL
+
+	if ext, ok := message["extendedTextMessage"].(map[string]interface{}); ok && ext != nil {
+		if text := stringValue(firstValue(ext, "text", "title", "description")); text != "" {
+			return text
 		}
-		return mediaURL
 	}
 
-	messageTypes := []string{
-		"extendedTextMessage",
-		"imageMessage",
-		"videoMessage",
-		"documentMessage",
-		"audioMessage",
-		"stickerMessage",
-		"buttonsResponseMessage",
-		"templateButtonReplyMessage",
-		"listResponseMessage",
-	}
-
-	for _, messageType := range messageTypes {
-		part, _ := message[messageType].(map[string]interface{})
-		if part == nil {
+	for _, mt := range []string{"imageMessage", "videoMessage", "documentMessage"} {
+		part, ok := message[mt].(map[string]interface{})
+		if !ok || part == nil {
 			continue
 		}
-		for _, key := range []string{"text", "caption", "selectedDisplayText", "title", "description"} {
-			if value := stringValue(part[key]); value != "" {
-				return value
-			}
-		}
-		if mediaURL := stringValue(part["mediaUrl"]); mediaURL != "" {
-			return "[" + strings.TrimSuffix(messageType, "Message") + "] " + mediaURL
+		if caption := stringValue(part["caption"]); caption != "" {
+			return caption
 		}
 	}
 
-	for _, mediaType := range []string{"imageMessage", "videoMessage", "documentMessage", "audioMessage", "stickerMessage"} {
-		part, _ := message[mediaType].(map[string]interface{})
-		if part == nil {
+	for _, mt := range []string{"buttonsResponseMessage", "templateButtonReplyMessage"} {
+		part, ok := message[mt].(map[string]interface{})
+		if !ok || part == nil {
 			continue
 		}
-		if mediaURL := stringValue(firstValue(part, "mediaUrl", "url", "directPath")); mediaURL != "" {
-			return "[" + strings.TrimSuffix(mediaType, "Message") + "] " + mediaURL
+		if v := stringValue(firstValue(part, "selectedDisplayText", "title")); v != "" {
+			return v
 		}
-		return "[" + strings.TrimSuffix(mediaType, "Message") + "]"
 	}
 
+	if part, ok := message["listResponseMessage"].(map[string]interface{}); ok && part != nil {
+		if v := stringValue(firstValue(part, "title", "description")); v != "" {
+			return v
+		}
+	}
+
+	return ""
+}
+
+func extractMediaInfo(data map[string]interface{}, info map[string]interface{}) *mediaInfo {
+	message := messageMapOf(data)
+	if message == nil {
+		return nil
+	}
+
+	mediaURL := stringValue(message["mediaUrl"])
+	base64Data := stringValue(message["base64"])
+	if mediaURL == "" && base64Data == "" {
+		return nil
+	}
+
+	mimetype := stringValue(message["mimetype"])
+	var fileName, kind string
+
+	for _, mt := range []string{"imageMessage", "videoMessage", "audioMessage", "documentMessage", "stickerMessage"} {
+		part, ok := message[mt].(map[string]interface{})
+		if !ok || part == nil {
+			continue
+		}
+		if mimetype == "" {
+			mimetype = stringValue(part["mimetype"])
+		}
+		if fn := stringValue(part["fileName"]); fn != "" {
+			fileName = fn
+		}
+		kind = strings.TrimSuffix(mt, "Message")
+		break
+	}
+
+	if fileName == "" {
+		id := stringValue(firstValue(info, "ID", "id"))
+		if id == "" {
+			id = "media"
+		}
+		fileName = id + extensionFromMimetype(mimetype, kind)
+	}
+	if mimetype == "" {
+		mimetype = "application/octet-stream"
+	}
+
+	return &mediaInfo{
+		URL:      mediaURL,
+		Base64:   base64Data,
+		Mimetype: mimetype,
+		Filename: fileName,
+		Kind:     kind,
+	}
+}
+
+func hasMediaSubtype(data map[string]interface{}) bool {
+	message := messageMapOf(data)
+	if message == nil {
+		return false
+	}
+	for _, mt := range []string{"imageMessage", "videoMessage", "audioMessage", "documentMessage", "stickerMessage"} {
+		if part, ok := message[mt].(map[string]interface{}); ok && part != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func messageMapOf(data map[string]interface{}) map[string]interface{} {
+	if data == nil {
+		return nil
+	}
+	if m, ok := data["Message"].(map[string]interface{}); ok && m != nil {
+		return m
+	}
+	if m, ok := data["message"].(map[string]interface{}); ok && m != nil {
+		return m
+	}
+	return nil
+}
+
+func extensionFromMimetype(mimetype, kind string) string {
+	mt := strings.TrimSpace(mimetype)
+	if i := strings.Index(mt, ";"); i >= 0 {
+		mt = strings.TrimSpace(mt[:i])
+	}
+	switch mt {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	case "image/gif":
+		return ".gif"
+	case "audio/ogg":
+		return ".ogg"
+	case "audio/mpeg":
+		return ".mp3"
+	case "audio/mp4":
+		return ".m4a"
+	case "audio/wav":
+		return ".wav"
+	case "video/mp4":
+		return ".mp4"
+	case "video/3gpp":
+		return ".3gp"
+	case "video/webm":
+		return ".webm"
+	case "application/pdf":
+		return ".pdf"
+	case "application/msword":
+		return ".doc"
+	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+		return ".docx"
+	case "application/vnd.ms-excel":
+		return ".xls"
+	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+		return ".xlsx"
+	}
+	if i := strings.LastIndex(mt, "/"); i >= 0 && i+1 < len(mt) {
+		ext := mt[i+1:]
+		if ext != "" && len(ext) <= 6 {
+			return "." + ext
+		}
+	}
+	switch kind {
+	case "image":
+		return ".jpg"
+	case "audio":
+		return ".ogg"
+	case "video":
+		return ".mp4"
+	case "sticker":
+		return ".webp"
+	case "document":
+		return ".bin"
+	}
 	return ""
 }
 
@@ -399,4 +666,8 @@ func boolValue(value interface{}) bool {
 	default:
 		return false
 	}
+}
+
+func escapeMultipartQuotes(s string) string {
+	return strings.ReplaceAll(s, `"`, `\"`)
 }
