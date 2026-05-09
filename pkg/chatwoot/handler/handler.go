@@ -1,14 +1,18 @@
 package chatwoot_handler
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	instance_model "github.com/EvolutionAPI/evolution-go/pkg/instance/model"
 	instance_repository "github.com/EvolutionAPI/evolution-go/pkg/instance/repository"
+	message_service "github.com/EvolutionAPI/evolution-go/pkg/message/service"
 	send_service "github.com/EvolutionAPI/evolution-go/pkg/sendMessage/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -17,6 +21,8 @@ import (
 type Handler struct {
 	instanceRepository instance_repository.InstanceRepository
 	sendService        send_service.SendService
+	messageService     message_service.MessageService
+	httpClient         *http.Client
 }
 
 type webhookPayload struct {
@@ -29,10 +35,16 @@ type webhookPayload struct {
 	Attachments  []map[string]interface{} `json:"attachments"`
 }
 
-func NewHandler(instanceRepository instance_repository.InstanceRepository, sendService send_service.SendService) *Handler {
+func NewHandler(
+	instanceRepository instance_repository.InstanceRepository,
+	sendService send_service.SendService,
+	messageService message_service.MessageService,
+) *Handler {
 	return &Handler{
 		instanceRepository: instanceRepository,
 		sendService:        sendService,
+		messageService:     messageService,
+		httpClient:         &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
@@ -75,7 +87,107 @@ func (h *Handler) Webhook(ctx *gin.Context) {
 		return
 	}
 
+	// Quando o agente responde no Chatwoot, marcar as mensagens incoming
+	// anteriores como lidas no WhatsApp (proxy: agent reply ⇒ tudo lido).
+	go h.markIncomingAsRead(payload, instance, number)
+
 	ctx.JSON(http.StatusOK, gin.H{"message": "success", "data": message})
+}
+
+// markIncomingAsRead busca as mensagens da conversa no Chatwoot e marca a última
+// mensagem incoming (do cliente) como lida no WhatsApp. A whatsmeow propaga o
+// recibo de leitura para todas as mensagens anteriores da mesma conversa.
+func (h *Handler) markIncomingAsRead(payload webhookPayload, instance *instance_model.Instance, phone string) {
+	if h.messageService == nil {
+		return
+	}
+	if instance.ChatwootURL == "" || instance.ChatwootAccountToken == "" || instance.ChatwootAccountID == "" {
+		return
+	}
+
+	conversationID := convertibleString(payload.Conversation["id"])
+	if conversationID == "" {
+		return
+	}
+
+	url := fmt.Sprintf("%s/api/v1/accounts/%s/conversations/%s/messages",
+		strings.TrimRight(instance.ChatwootURL, "/"),
+		instance.ChatwootAccountID,
+		conversationID,
+	)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("api_access_token", instance.ChatwootAccountToken)
+
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+
+	var parsed struct {
+		Payload []struct {
+			MessageType int     `json:"message_type"`
+			SourceID    string  `json:"source_id"`
+			CreatedAt   float64 `json:"created_at"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return
+	}
+
+	var ids []string
+	for _, m := range parsed.Payload {
+		if m.MessageType != 0 {
+			continue
+		}
+		if m.SourceID == "" || strings.HasPrefix(m.SourceID, "chatwoot_") {
+			continue
+		}
+		ids = append(ids, m.SourceID)
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	_, _ = h.messageService.MarkRead(&message_service.MarkReadStruct{
+		Id:     ids,
+		Number: phone,
+	}, instance)
+}
+
+func convertibleString(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case float64:
+		if v == 0 {
+			return ""
+		}
+		return strconv.FormatInt(int64(v), 10)
+	case int:
+		if v == 0 {
+			return ""
+		}
+		return strconv.Itoa(v)
+	case int64:
+		if v == 0 {
+			return ""
+		}
+		return strconv.FormatInt(v, 10)
+	default:
+		return ""
+	}
 }
 
 func (h *Handler) findInstance(identifier string) (*instance_model.Instance, error) {
