@@ -18,26 +18,28 @@
     style.textContent = `
       .cw-card-btn {
         position: absolute;
-        bottom: 56px;
+        top: 6px;
         right: 10px;
         z-index: 5;
         background: rgba(45, 154, 211, 0.18);
         color: #2d9ad3;
         border: 1px solid rgba(45, 154, 211, 0.5);
-        border-radius: 6px;
-        padding: 4px 9px;
-        font-size: 11px;
+        border-radius: 4px;
+        padding: 2px 7px;
+        font-size: 10px;
         font-weight: 600;
+        letter-spacing: 0.02em;
         cursor: pointer;
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        line-height: 1;
+        gap: 4px;
+        line-height: 1.4;
         contain: layout paint;
         transition: background 0.15s ease;
       }
       .cw-card-btn:hover { background: rgba(45, 154, 211, 0.35); }
-      .cw-card-btn svg { display: block; }
+      .cw-card-btn svg, .cw-card-btn img { display: block; }
+      .cw-card-btn img { width: 11px; height: 11px; border-radius: 50%; }
 
       .cw-overlay {
         position: fixed; inset: 0;
@@ -62,7 +64,8 @@
         margin-bottom: 18px; padding-bottom: 12px;
         border-bottom: 1px solid rgba(255,255,255,0.08);
       }
-      .cw-modal-header h2 { margin: 0; font-size: 17px; font-weight: 600; }
+      .cw-modal-header h2 { margin: 0; font-size: 17px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+      .cw-modal-header h2 img { width: 22px; height: 22px; border-radius: 50%; }
       .cw-modal-header h2 small { font-weight: 400; opacity: 0.6; font-size: 13px; }
       .cw-close {
         background: none; border: none; color: inherit;
@@ -255,7 +258,7 @@
         btn.title = 'Configurar Chatwoot';
         btn.setAttribute('data-cw-btn', '1');
         btn.innerHTML =
-          '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chatwoot';
+          '<img src="/assets/chatwoot-icon.png" alt="" />Chatwoot';
         btn.addEventListener('click', e => {
           e.preventDefault();
           e.stopPropagation();
@@ -289,7 +292,7 @@
     overlay.innerHTML =
       '<div class="cw-modal" role="dialog" aria-modal="true">' +
       '<div class="cw-modal-header">' +
-      '<h2>Chatwoot <small>· ' + escapeHtml(instance.name) + '</small></h2>' +
+      '<h2><img src="/assets/chatwoot-icon.png" alt="" />Chatwoot <small>· ' + escapeHtml(instance.name) + '</small></h2>' +
       '<button class="cw-close" type="button" aria-label="Fechar">&times;</button>' +
       '</div>' +
       '<div class="cw-body"><div class="cw-loading">Carregando configurações...</div></div>' +
