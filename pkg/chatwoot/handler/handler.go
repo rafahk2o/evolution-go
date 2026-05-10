@@ -346,20 +346,16 @@ func (h *Handler) postVideoOptimisticNote(payload webhookPayload, instance *inst
 		filename = "video.mp4"
 	}
 
-	content := "Enviando video para o WhatsApp..."
 	thumb, err := h.videoThumbnail(mediaURL, instance.ChatwootAccountToken)
 	if err != nil {
 		if h.chatwootClient != nil {
 			h.chatwootClient.Logger(instance.Id).LogWarn("[%s] chatwoot video optimistic thumb failed: %v", instance.Id, err)
 		}
-		if err := h.postPrivateNote(instance, conversationID, content, nil, ""); err != nil && h.chatwootClient != nil {
-			h.chatwootClient.Logger(instance.Id).LogWarn("[%s] chatwoot video optimistic note failed: %v", instance.Id, err)
-		}
 		return
 	}
 
 	thumbName := strings.TrimSuffix(filename, filepath.Ext(filename)) + "-thumb.jpg"
-	if err := h.postPrivateNote(instance, conversationID, content, thumb, thumbName); err != nil && h.chatwootClient != nil {
+	if err := h.postPrivateNote(instance, conversationID, "", thumb, thumbName); err != nil && h.chatwootClient != nil {
 		h.chatwootClient.Logger(instance.Id).LogWarn("[%s] chatwoot video optimistic note failed: %v", instance.Id, err)
 	}
 }
@@ -373,7 +369,9 @@ func (h *Handler) postPrivateNote(instance *instance_model.Instance, conversatio
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	_ = writer.WriteField("content", content)
+	if strings.TrimSpace(content) != "" {
+		_ = writer.WriteField("content", content)
+	}
 	_ = writer.WriteField("private", "true")
 	_ = writer.WriteField("message_type", "outgoing")
 	if len(attachment) > 0 {
