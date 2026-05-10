@@ -65,7 +65,7 @@ func NewClient(loggerWrapper *logger_wrapper.LoggerManager) *Client {
 			Timeout: 20 * time.Second,
 		},
 		mediaClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout: 90 * time.Second,
 		},
 		loggerWrapper: loggerWrapper,
 		outgoing:      cache.New(24*time.Hour, 1*time.Hour),
@@ -568,19 +568,39 @@ func (c *Client) resolveAttachment(instance *instance_model.Instance, info *medi
 }
 
 func (c *Client) downloadMedia(rawURL string) ([]byte, error) {
+	body, _, err := c.DownloadMedia(rawURL)
+	return body, err
+}
+
+// DownloadMedia faz GET na URL com User-Agent e timeout estendido,
+// retorna os bytes e o Content-Type da resposta.
+// Usado tanto pelo fluxo WA→Chatwoot (mediaUrl do Minio) quanto pelo
+// fluxo Chatwoot→WA (data_url da ActiveStorage do Chatwoot).
+func (c *Client) DownloadMedia(rawURL string) ([]byte, string, error) {
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
+	req.Header.Set("User-Agent", "evolution-go/1.0")
+	req.Header.Set("Accept", "*/*")
+
 	resp, err := c.mediaClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("download %s failed: %s", rawURL, resp.Status)
+		return nil, "", fmt.Errorf("download %s failed: %s", rawURL, resp.Status)
 	}
-	return io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	ct := resp.Header.Get("Content-Type")
+	if i := strings.Index(ct, ";"); i >= 0 {
+		ct = strings.TrimSpace(ct[:i])
+	}
+	return body, ct, nil
 }
 
 func extractContent(data map[string]interface{}) string {
