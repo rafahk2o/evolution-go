@@ -92,6 +92,27 @@ func (c *Client) RegisterOutgoing(chatwootMsgID, conversationID string) {
 	c.outgoing.Set(chatwootMsgID, conversationID, cache.DefaultExpiration)
 }
 
+func (c *Client) RefreshAttachmentMessage(instance *instance_model.Instance, conversationID, messageID string) {
+	if c == nil || instance == nil {
+		return
+	}
+	settings := settingsFromInstance(instance)
+	conversationID = strings.TrimSpace(conversationID)
+	messageID = strings.TrimSpace(messageID)
+	if settings.URL == "" || settings.AccountID == "" || settings.AccountToken == "" || conversationID == "" || messageID == "" {
+		return
+	}
+
+	for _, delay := range []time.Duration{500 * time.Millisecond, 1500 * time.Millisecond, 3500 * time.Millisecond} {
+		go func(delay time.Duration) {
+			time.Sleep(delay)
+			if err := c.refreshChatwootAttachmentMessage(settings, conversationID, messageID); err != nil {
+				c.loggerWrapper.GetLogger(instance.Id).LogWarn("[%s] chatwoot attachment refresh failed: %v", instance.Id, err)
+			}
+		}(delay)
+	}
+}
+
 func (c *Client) lookupOutgoing(chatwootMsgID string) (string, bool) {
 	if c == nil || c.outgoing == nil {
 		return "", false
@@ -409,17 +430,17 @@ func (c *Client) scheduleAttachmentRefresh(settings *instance_model.ChatwootSett
 
 	go func() {
 		time.Sleep(1500 * time.Millisecond)
-		if err := c.refreshChatwootAttachmentMessage(settings, conversationID, messageID); err != nil {
+		if err := c.refreshChatwootAttachmentMessage(settings, strconv.Itoa(conversationID), messageID); err != nil {
 			c.loggerWrapper.GetLogger("").LogWarn("chatwoot attachment refresh failed: %v", err)
 		}
 	}()
 }
 
-func (c *Client) refreshChatwootAttachmentMessage(settings *instance_model.ChatwootSettings, conversationID int, messageID string) error {
-	endpoint := fmt.Sprintf("%s/api/v1/accounts/%s/conversations/%d/messages/%s",
+func (c *Client) refreshChatwootAttachmentMessage(settings *instance_model.ChatwootSettings, conversationID, messageID string) error {
+	endpoint := fmt.Sprintf("%s/api/v1/accounts/%s/conversations/%s/messages/%s",
 		strings.TrimRight(settings.URL, "/"),
 		url.PathEscape(settings.AccountID),
-		conversationID,
+		url.PathEscape(conversationID),
 		url.PathEscape(messageID),
 	)
 

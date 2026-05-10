@@ -1,15 +1,10 @@
 package chatwoot_handler
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -96,9 +91,9 @@ func (h *Handler) Webhook(ctx *gin.Context) {
 			chatwootMsgID := stringValue(payload.ID)
 			conversationID := convertibleString(payload.Conversation["id"])
 			h.chatwootClient.RegisterOutgoing(chatwootMsgID, conversationID)
-		}
-		if isVideoAttachment(payload) {
-			go h.postVideoOptimisticNote(payload, instance)
+			if isVideoAttachment(payload) {
+				h.chatwootClient.RefreshAttachmentMessage(instance, conversationID, chatwootMsgID)
+			}
 		}
 		go func() {
 			if _, err := h.send(payload, instance, number, messageID); err != nil && h.chatwootClient != nil {
@@ -324,142 +319,6 @@ func (h *Handler) send(payload webhookPayload, instance *instance_model.Instance
 		Text:   content,
 		Id:     messageID,
 	}, instance)
-}
-
-func (h *Handler) postVideoOptimisticNote(payload webhookPayload, instance *instance_model.Instance) {
-	if instance.ChatwootURL == "" || instance.ChatwootAccountToken == "" || instance.ChatwootAccountID == "" {
-		return
-	}
-	conversationID := convertibleString(payload.Conversation["id"])
-	if conversationID == "" {
-		return
-	}
-
-	attachment := firstSupportedAttachment(payload.Attachments)
-	if attachment == nil {
-		return
-	}
-
-	mediaURL := h.absoluteChatwootURL(instance, stringValue(attachment["data_url"]))
-	filename := strings.TrimSpace(stringValue(attachment["filename"]))
-	if filename == "" {
-		filename = "video.mp4"
-	}
-
-	thumb, err := h.videoThumbnail(mediaURL, instance.ChatwootAccountToken)
-	if err != nil {
-		if h.chatwootClient != nil {
-			h.chatwootClient.Logger(instance.Id).LogWarn("[%s] chatwoot video optimistic thumb failed: %v", instance.Id, err)
-		}
-		return
-	}
-
-	thumbName := strings.TrimSuffix(filename, filepath.Ext(filename)) + "-thumb.jpg"
-	if err := h.postPrivateNote(instance, conversationID, "", thumb, thumbName); err != nil && h.chatwootClient != nil {
-		h.chatwootClient.Logger(instance.Id).LogWarn("[%s] chatwoot video optimistic note failed: %v", instance.Id, err)
-	}
-}
-
-func (h *Handler) postPrivateNote(instance *instance_model.Instance, conversationID, content string, attachment []byte, filename string) error {
-	endpoint := fmt.Sprintf("%s/api/v1/accounts/%s/conversations/%s/messages",
-		strings.TrimRight(instance.ChatwootURL, "/"),
-		instance.ChatwootAccountID,
-		conversationID,
-	)
-
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	if strings.TrimSpace(content) != "" {
-		_ = writer.WriteField("content", content)
-	}
-	_ = writer.WriteField("private", "true")
-	_ = writer.WriteField("message_type", "outgoing")
-	if len(attachment) > 0 {
-		if filename == "" {
-			filename = "video-thumb.jpg"
-		}
-		part, err := writer.CreateFormFile("attachments[]", filename)
-		if err != nil {
-			return err
-		}
-		if _, err := part.Write(attachment); err != nil {
-			return err
-		}
-	}
-	if err := writer.Close(); err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, endpoint, &body)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("api_access_token", instance.ChatwootAccountToken)
-
-	client := &http.Client{Timeout: 90 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("chatwoot private note failed: %s: %s", resp.Status, string(respBody))
-	}
-	return nil
-}
-
-func (h *Handler) videoThumbnail(mediaURL, accountToken string) ([]byte, error) {
-	if mediaURL == "" {
-		return nil, fmt.Errorf("missing media url")
-	}
-	data, err := h.downloadChatwootMedia(mediaURL, accountToken)
-	if err != nil {
-		return nil, err
-	}
-
-	dir, err := os.MkdirTemp("", "evo-chatwoot-video-*")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(dir)
-
-	input := filepath.Join(dir, "video")
-	output := filepath.Join(dir, "thumb.jpg")
-	if err := os.WriteFile(input, data, 0600); err != nil {
-		return nil, err
-	}
-
-	cmd := exec.Command("ffmpeg", "-y", "-ss", "00:00:01", "-i", input, "-frames:v", "1", "-q:v", "4", output)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("ffmpeg thumbnail failed: %v: %s", err, strings.TrimSpace(string(out)))
-	}
-	return os.ReadFile(output)
-}
-
-func (h *Handler) downloadChatwootMedia(mediaURL, accountToken string) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, mediaURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "evolution-go/1.0")
-	req.Header.Set("Accept", "*/*")
-	if strings.TrimSpace(accountToken) != "" {
-		req.Header.Set("api_access_token", accountToken)
-	}
-
-	client := &http.Client{Timeout: 90 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("download media failed: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	return io.ReadAll(resp.Body)
 }
 
 func (h *Handler) sendChatwootMedia(payload webhookPayload, attachment map[string]interface{}, mediaURL string, instance *instance_model.Instance, number, messageID string) (interface{}, error) {
