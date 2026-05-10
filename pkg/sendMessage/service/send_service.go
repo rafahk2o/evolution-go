@@ -1244,7 +1244,6 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 				return nil, errors.New(errMsg)
 			}
 			uploadType = whatsmeow.MediaVideo
-			jpegThumbnail = generateVideoThumbnail(fileData)
 		case "audio":
 			converterApiUrl := s.config.ApiAudioConverter
 			converterApiKey := s.config.ApiAudioConverterKey
@@ -1602,11 +1601,9 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 					data.Filename = "video" + extensionFromMIME(mimeType)
 				}
 				uploadType = whatsmeow.MediaDocument
-				jpegThumbnail = generateVideoThumbnail(fileData)
 				break
 			}
 			uploadType = whatsmeow.MediaVideo
-			jpegThumbnail = generateVideoThumbnail(fileData)
 		case "audio":
 			s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Iniciando conversão de áudio...", instance.Id)
 			converterApiUrl := s.config.ApiAudioConverter
