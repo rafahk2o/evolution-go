@@ -933,7 +933,10 @@ func generateVideoThumbnail(data []byte) []byte {
 	}
 	output := filepath.Join(dir, "thumb.jpg")
 
-	cmd := exec.Command("ffmpeg",
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-hide_banner",
 		"-loglevel", "error",
 		"-ss", "00:00:01",
@@ -1244,6 +1247,7 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 				return nil, errors.New(errMsg)
 			}
 			uploadType = whatsmeow.MediaVideo
+			jpegThumbnail = generateVideoThumbnail(fileData)
 		case "audio":
 			converterApiUrl := s.config.ApiAudioConverter
 			converterApiKey := s.config.ApiAudioConverterKey
@@ -1604,6 +1608,7 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 				break
 			}
 			uploadType = whatsmeow.MediaVideo
+			jpegThumbnail = generateVideoThumbnail(fileData)
 		case "audio":
 			s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Iniciando conversão de áudio...", instance.Id)
 			converterApiUrl := s.config.ApiAudioConverter
