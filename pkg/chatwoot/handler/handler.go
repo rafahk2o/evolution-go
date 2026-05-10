@@ -297,13 +297,18 @@ func (h *Handler) sendChatwootMedia(payload webhookPayload, attachment map[strin
 	if ct == "" || ct == "application/octet-stream" {
 		ct = detectedCT
 	}
-	primaryType := pickWhatsAppMediaType(ct, stringValue(attachment["file_type"]))
 	filename := strings.TrimSpace(stringValue(attachment["filename"]))
 	if filename == "" {
 		filename = "file" + extensionFor(ct)
 	} else if !strings.Contains(filename, ".") {
 		filename = filename + extensionFor(ct)
 	}
+	if ct == "" || ct == "application/octet-stream" {
+		if filenameCT := contentTypeFromFilename(filename); filenameCT != "" {
+			ct = filenameCT
+		}
+	}
+	primaryType := pickWhatsAppMediaType(ct, stringValue(attachment["file_type"]))
 
 	build := func(mediaType string) *send_service.MediaStruct {
 		return &send_service.MediaStruct{
@@ -405,6 +410,37 @@ func extensionFor(ct string) string {
 	return ""
 }
 
+func contentTypeFromFilename(filename string) string {
+	lower := strings.ToLower(strings.TrimSpace(filename))
+	switch {
+	case strings.HasSuffix(lower, ".mp4"):
+		return "video/mp4"
+	case strings.HasSuffix(lower, ".mov"):
+		return "video/quicktime"
+	case strings.HasSuffix(lower, ".webm"):
+		return "video/webm"
+	case strings.HasSuffix(lower, ".3gp"):
+		return "video/3gpp"
+	case strings.HasSuffix(lower, ".pdf"):
+		return "application/pdf"
+	case strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"):
+		return "image/jpeg"
+	case strings.HasSuffix(lower, ".png"):
+		return "image/png"
+	case strings.HasSuffix(lower, ".webp"):
+		return "image/webp"
+	case strings.HasSuffix(lower, ".ogg"):
+		return "audio/ogg"
+	case strings.HasSuffix(lower, ".mp3"):
+		return "audio/mpeg"
+	case strings.HasSuffix(lower, ".m4a"):
+		return "audio/mp4"
+	case strings.HasSuffix(lower, ".wav"):
+		return "audio/wav"
+	}
+	return ""
+}
+
 func pickWhatsAppMediaType(contentType, chatwootType string) string {
 	ct := strings.ToLower(strings.TrimSpace(contentType))
 	switch ct {
@@ -426,8 +462,12 @@ func pickWhatsAppMediaType(contentType, chatwootType string) string {
 		return "audio"
 	}
 	switch strings.ToLower(strings.TrimSpace(chatwootType)) {
-	case "image", "video", "audio":
-		return "document"
+	case "image":
+		return "image"
+	case "video":
+		return "video"
+	case "audio":
+		return "audio"
 	}
 	return "document"
 }

@@ -909,6 +909,51 @@ func generateImageThumbnail(data []byte) []byte {
 	return buf.Bytes()
 }
 
+func defaultAudioStreamingSidecar() []byte {
+	return []byte("QpmXDsU7YLagdg==")
+}
+
+func defaultAudioWaveform() []byte {
+	return []byte("OjAnExISDgsKCAkJBwgkHAQEBBEFAwMNAxAcKCgkFzM0QUE4Jh4eKAoKChcLCwkeFgkJCQo3JiQmIiIRPz8/Ow==")
+}
+
+func normalizeMediaMIME(mimeType, filename string, data []byte) string {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	if mimeType != "" && mimeType != "application/octet-stream" {
+		return mimeType
+	}
+
+	if len(data) >= 5 && bytes.Equal(data[:5], []byte("%PDF-")) {
+		return "application/pdf"
+	}
+	if len(data) >= 12 && string(data[4:8]) == "ftyp" {
+		return "video/mp4"
+	}
+
+	lowerName := strings.ToLower(strings.TrimSpace(filename))
+	switch {
+	case strings.HasSuffix(lowerName, ".mp4"):
+		return "video/mp4"
+	case strings.HasSuffix(lowerName, ".pdf"):
+		return "application/pdf"
+	case strings.HasSuffix(lowerName, ".jpg"), strings.HasSuffix(lowerName, ".jpeg"):
+		return "image/jpeg"
+	case strings.HasSuffix(lowerName, ".png"):
+		return "image/png"
+	case strings.HasSuffix(lowerName, ".webp"):
+		return "image/webp"
+	case strings.HasSuffix(lowerName, ".ogg"):
+		return "audio/ogg"
+	case strings.HasSuffix(lowerName, ".mp3"):
+		return "audio/mpeg"
+	case strings.HasSuffix(lowerName, ".m4a"):
+		return "audio/mp4"
+	case strings.HasSuffix(lowerName, ".wav"):
+		return "audio/wav"
+	}
+	return mimeType
+}
+
 func convertAudioToOpusWithDuration(inputData []byte) ([]byte, int, error) {
 	cmd := exec.Command("ffmpeg", "-i", "pipe:0",
 		"-f",
@@ -1002,6 +1047,7 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 
 		mime, _ := mimetype.DetectReader(bytes.NewReader(fileData))
 		mimeType := mime.String()
+		mimeType = normalizeMediaMIME(mimeType, data.Filename, fileData)
 
 		var uploadType whatsmeow.MediaType
 		var duration int
@@ -1156,25 +1202,29 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 		case "audio":
 			if isNewsletter {
 				media = &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
-					URL:        &uploaded.URL,
-					PTT:        proto.Bool(audioPTT),
-					DirectPath: &uploaded.DirectPath,
-					Mimetype:   proto.String(mimeType),
-					FileSHA256: uploaded.FileSHA256,
-					FileLength: &uploaded.FileLength,
-					Seconds:    proto.Uint32(uint32(duration)),
+					URL:              &uploaded.URL,
+					PTT:              proto.Bool(audioPTT),
+					DirectPath:       &uploaded.DirectPath,
+					Mimetype:         proto.String(mimeType),
+					FileSHA256:       uploaded.FileSHA256,
+					FileLength:       &uploaded.FileLength,
+					StreamingSidecar: defaultAudioStreamingSidecar(),
+					Waveform:         defaultAudioWaveform(),
+					Seconds:          proto.Uint32(uint32(duration)),
 				}}
 			} else {
 				media = &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
-					URL:           proto.String(uploaded.URL),
-					PTT:           proto.Bool(audioPTT),
-					DirectPath:    proto.String(uploaded.DirectPath),
-					MediaKey:      uploaded.MediaKey,
-					Mimetype:      proto.String(mimeType),
-					FileEncSHA256: uploaded.FileEncSHA256,
-					FileSHA256:    uploaded.FileSHA256,
-					FileLength:    proto.Uint64(uploaded.FileLength),
-					Seconds:       proto.Uint32(uint32(duration)),
+					URL:              proto.String(uploaded.URL),
+					PTT:              proto.Bool(audioPTT),
+					DirectPath:       proto.String(uploaded.DirectPath),
+					MediaKey:         uploaded.MediaKey,
+					Mimetype:         proto.String(mimeType),
+					FileEncSHA256:    uploaded.FileEncSHA256,
+					FileSHA256:       uploaded.FileSHA256,
+					FileLength:       proto.Uint64(uploaded.FileLength),
+					StreamingSidecar: defaultAudioStreamingSidecar(),
+					Waveform:         defaultAudioWaveform(),
+					Seconds:          proto.Uint32(uint32(duration)),
 				}}
 			}
 			mediaType = "AudioMessage"
