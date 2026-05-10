@@ -29,6 +29,7 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
+	xdraw "golang.org/x/image/draw"
 	"golang.org/x/net/html"
 	"google.golang.org/protobuf/proto"
 )
@@ -857,6 +858,57 @@ func convertAudioWithApi(apiUrl string, apiKey string, convertData ConvertAudio)
 	return base64ToBytes, apiResponse.Duration, nil
 }
 
+// generateImageThumbnail decodifica a imagem e devolve um JPEG pequeno (max
+// 100×100, qualidade 50) para usar como ImageMessage.JpegThumbnail.
+// Retorna nil se a imagem não puder ser decodificada — nesse caso a
+// mensagem é enviada sem preview, mas continua sendo image.
+func generateImageThumbnail(data []byte) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+	src, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		// Tenta WebP via decoder dedicado (image.Decode não cobre webp por padrão).
+		if w, werr := webp.Decode(bytes.NewReader(data)); werr == nil {
+			src = w
+		} else {
+			return nil
+		}
+	}
+
+	bounds := src.Bounds()
+	w, h := bounds.Dx(), bounds.Dy()
+	if w == 0 || h == 0 {
+		return nil
+	}
+	const maxDim = 100
+	dstW, dstH := w, h
+	if w > maxDim || h > maxDim {
+		if w >= h {
+			dstW = maxDim
+			dstH = h * maxDim / w
+		} else {
+			dstH = maxDim
+			dstW = w * maxDim / h
+		}
+	}
+	if dstW < 1 {
+		dstW = 1
+	}
+	if dstH < 1 {
+		dstH = 1
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, bounds, xdraw.Over, nil)
+
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 50}); err != nil {
+		return nil
+	}
+	return buf.Bytes()
+}
+
 func convertAudioToOpusWithDuration(inputData []byte) ([]byte, int, error) {
 	cmd := exec.Command("ffmpeg", "-i", "pipe:0",
 		"-f",
@@ -953,6 +1005,8 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 
 		var uploadType whatsmeow.MediaType
 		var duration int
+		var jpegThumbnail []byte
+		audioPTT := false
 
 		switch data.Type {
 		case "image":
@@ -964,6 +1018,7 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 				mimeType = "image/jpeg"
 			}
 			uploadType = whatsmeow.MediaImage
+			jpegThumbnail = generateImageThumbnail(fileData)
 		case "video":
 			if mimeType != "video/mp4" {
 				errMsg := fmt.Sprintf("Invalid file format: '%s'. Only 'video/mp4' is accepted", mimeType)
@@ -974,22 +1029,22 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 			converterApiUrl := s.config.ApiAudioConverter
 			converterApiKey := s.config.ApiAudioConverterKey
 			var convertedData []byte
-			var err error
+			var convErr error
 			if converterApiUrl == "" {
-
-				convertedData, duration, err = convertAudioToOpusWithDuration(fileData)
-				if err != nil {
-					return nil, err
-				}
+				convertedData, duration, convErr = convertAudioToOpusWithDuration(fileData)
 			} else {
-				convertedData, duration, err = convertAudioWithApi(converterApiUrl, converterApiKey, ConvertAudio{Base64: base64.StdEncoding.EncodeToString(fileData)})
-				if err != nil {
-					return nil, err
-				}
+				convertedData, duration, convErr = convertAudioWithApi(converterApiUrl, converterApiKey, ConvertAudio{Base64: base64.StdEncoding.EncodeToString(fileData)})
 			}
-
-			fileData = convertedData
-			mimeType = "audio/ogg; codecs=opus"
+			if convErr == nil {
+				fileData = convertedData
+				mimeType = "audio/ogg; codecs=opus"
+				audioPTT = true
+			} else {
+				// Conversão falhou (ex.: ffmpeg ausente). Envia o áudio cru —
+				// WhatsApp mostra player de áudio (sem waveform de voice note),
+				// mas continua sendo AudioMessage e não DocumentMessage.
+				s.loggerWrapper.GetLogger(instance.Id).LogWarn("[%s] audio conversion failed (%v), sending raw audio without PTT", instance.Id, convErr)
+			}
 			uploadType = whatsmeow.MediaAudio
 		case "document":
 			uploadType = whatsmeow.MediaDocument
@@ -1031,12 +1086,13 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 			if isNewsletter {
 				// Newsletter: SEM MediaKey e FileEncSHA256
 				media = &waE2E.Message{ImageMessage: &waE2E.ImageMessage{
-					Caption:    proto.String(data.Caption),
-					URL:        &uploaded.URL,
-					DirectPath: &uploaded.DirectPath,
-					Mimetype:   proto.String(mimeType),
-					FileSHA256: uploaded.FileSHA256,
-					FileLength: &uploaded.FileLength,
+					Caption:       proto.String(data.Caption),
+					URL:           &uploaded.URL,
+					DirectPath:    &uploaded.DirectPath,
+					Mimetype:      proto.String(mimeType),
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    &uploaded.FileLength,
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			} else {
 				// Normal: COM MediaKey e FileEncSHA256
@@ -1049,6 +1105,7 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 					FileEncSHA256: uploaded.FileEncSHA256,
 					FileSHA256:    uploaded.FileSHA256,
 					FileLength:    proto.Uint64(uint64(len(fileData))),
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			}
 			mediaType = "ImageMessage"
@@ -1100,7 +1157,7 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 			if isNewsletter {
 				media = &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
 					URL:        &uploaded.URL,
-					PTT:        proto.Bool(true),
+					PTT:        proto.Bool(audioPTT),
 					DirectPath: &uploaded.DirectPath,
 					Mimetype:   proto.String(mimeType),
 					FileSHA256: uploaded.FileSHA256,
@@ -1110,7 +1167,7 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 			} else {
 				media = &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
 					URL:           proto.String(uploaded.URL),
-					PTT:           proto.Bool(true),
+					PTT:           proto.Bool(audioPTT),
 					DirectPath:    proto.String(uploaded.DirectPath),
 					MediaKey:      uploaded.MediaKey,
 					Mimetype:      proto.String(mimeType),
