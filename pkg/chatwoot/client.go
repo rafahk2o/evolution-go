@@ -325,7 +325,11 @@ func (c *Client) createIncomingMessage(settings *instance_model.ChatwootSettings
 	)
 
 	if message.Attachment != nil {
-		return c.postMultipartMessage(settings, path, message)
+		responseBody, err := c.postMultipartMessage(settings, path, message)
+		if err == nil {
+			c.scheduleAttachmentRefresh(settings, conversationID, responseBody)
+		}
+		return err
 	}
 
 	body := map[string]string{
@@ -336,7 +340,7 @@ func (c *Client) createIncomingMessage(settings *instance_model.ChatwootSettings
 	return err
 }
 
-func (c *Client) postMultipartMessage(settings *instance_model.ChatwootSettings, path string, message *IncomingMessage) error {
+func (c *Client) postMultipartMessage(settings *instance_model.ChatwootSettings, path string, message *IncomingMessage) ([]byte, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 
@@ -362,19 +366,19 @@ func (c *Client) postMultipartMessage(settings *instance_model.ChatwootSettings,
 	}
 	part, err := mw.CreatePart(header)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if _, err := part.Write(message.Attachment.Data); err != nil {
-		return err
+		return nil, err
 	}
 	if err := mw.Close(); err != nil {
-		return err
+		return nil, err
 	}
 
 	base := strings.TrimRight(settings.URL, "/")
 	req, err := http.NewRequest(http.MethodPost, base+path, &buf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	if settings.AccountToken != "" {
@@ -383,15 +387,102 @@ func (c *Client) postMultipartMessage(settings *instance_model.ChatwootSettings,
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("chatwoot multipart message failed with status %s: %s", resp.Status, string(respBody))
+		return nil, fmt.Errorf("chatwoot multipart message failed with status %s: %s", resp.Status, string(respBody))
+	}
+	return respBody, nil
+}
+
+func (c *Client) scheduleAttachmentRefresh(settings *instance_model.ChatwootSettings, conversationID int, responseBody []byte) {
+	if settings == nil || settings.URL == "" || settings.AccountID == "" || settings.AccountToken == "" {
+		return
+	}
+	messageID := extractChatwootMessageID(responseBody)
+	if messageID == "" {
+		return
+	}
+
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		if err := c.refreshChatwootAttachmentMessage(settings, conversationID, messageID); err != nil {
+			c.loggerWrapper.GetLogger("").LogWarn("chatwoot attachment refresh failed: %v", err)
+		}
+	}()
+}
+
+func (c *Client) refreshChatwootAttachmentMessage(settings *instance_model.ChatwootSettings, conversationID int, messageID string) error {
+	endpoint := fmt.Sprintf("%s/api/v1/accounts/%s/conversations/%d/messages/%s",
+		strings.TrimRight(settings.URL, "/"),
+		url.PathEscape(settings.AccountID),
+		conversationID,
+		url.PathEscape(messageID),
+	)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"content_attributes": map[string]interface{}{
+			"evolution_attachment_refresh_at": time.Now().UnixNano(),
+		},
+	})
+	req, err := http.NewRequest(http.MethodPatch, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("api_access_token", settings.AccountToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("chatwoot attachment refresh PATCH %s: %s - %s", endpoint, resp.Status, string(respBody))
 	}
 	return nil
+}
+
+func extractChatwootMessageID(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return ""
+	}
+	return firstNestedString(parsed,
+		[]string{"id"},
+		[]string{"ID"},
+		[]string{"message", "id"},
+		[]string{"message", "ID"},
+		[]string{"payload", "id"},
+		[]string{"payload", "ID"},
+		[]string{"data", "id"},
+		[]string{"data", "ID"},
+	)
+}
+
+func firstNestedString(data map[string]interface{}, paths ...[]string) string {
+	for _, path := range paths {
+		var current interface{} = data
+		for _, key := range path {
+			m, ok := current.(map[string]interface{})
+			if !ok {
+				current = nil
+				break
+			}
+			current = m[key]
+		}
+		if value := stringValue(current); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (c *Client) doJSON(settings *instance_model.ChatwootSettings, method, path string, body interface{}) ([]byte, error) {
