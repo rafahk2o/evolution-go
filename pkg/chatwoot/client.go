@@ -72,6 +72,11 @@ func NewClient(loggerWrapper *logger_wrapper.LoggerManager) *Client {
 	}
 }
 
+// Logger expõe o logger interno para uso por handlers que possuem o Client.
+func (c *Client) Logger(instanceID string) *logger_wrapper.Logger {
+	return c.loggerWrapper.GetLogger(instanceID)
+}
+
 // RegisterOutgoing memoriza o mapeamento entre o ID da mensagem do Chatwoot
 // e a conversa onde ela foi enviada. Usamos isso para atualizar o status
 // (sent/delivered/read) quando o WhatsApp emite recibos.
