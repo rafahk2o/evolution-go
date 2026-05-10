@@ -346,7 +346,7 @@ func (c *Client) postMultipartMessage(settings *instance_model.ChatwootSettings,
 
 	if message.Content != "" {
 		if err := mw.WriteField("content", message.Content); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if message.EchoID != "" {
