@@ -164,15 +164,32 @@
         });
       }
 
-      // Posiciona como ÚLTIMOS filhos da barra (separador + botão).
-      // Pôr depois da lixeira evita conflito com a reconciliação do React.
-      if (actions.lastElementChild !== button) {
-        var sep = actions.querySelector('[data-chatwoot-sep-for="' + instance.id + '"]');
-        if (!sep) {
-          sep = document.createElement("div");
-          sep.className = "cw-action-sep";
-          sep.dataset.chatwootSepFor = instance.id;
+      // Tenta posicionar antes da engrenagem (Settings, text-gray-500).
+      // Se não encontrar, cai pra fim da barra (depois da lixeira).
+      var gear = null;
+      var btns = actions.querySelectorAll("button");
+      for (var i = 0; i < btns.length; i++) {
+        var cls = btns[i].className || "";
+        if (cls.indexOf("text-gray-500") !== -1 && cls.indexOf("text-red-500") === -1 && btns[i] !== button) {
+          gear = btns[i];
+          break;
         }
+      }
+
+      var sep = actions.querySelector('[data-chatwoot-sep-for="' + instance.id + '"]');
+      if (!sep) {
+        sep = document.createElement("div");
+        sep.className = "cw-action-sep";
+        sep.dataset.chatwootSepFor = instance.id;
+      }
+
+      if (gear) {
+        // Ordem desejada: ..., Test, sep_test, Chatwoot, sep_chatwoot, Gear, ...
+        if (button.nextElementSibling !== sep || sep.nextElementSibling !== gear) {
+          actions.insertBefore(button, gear);
+          actions.insertBefore(sep, gear);
+        }
+      } else if (actions.lastElementChild !== button) {
         actions.appendChild(sep);
         actions.appendChild(button);
       }
@@ -373,14 +390,25 @@
     injectButtons();
   }
 
-  var observer = new MutationObserver(function () {
-    injectButtons();
-  });
+  var injectScheduled = false;
+  var injecting = false;
+  function scheduleInject() {
+    if (injectScheduled || injecting) return;
+    injectScheduled = true;
+    setTimeout(function () {
+      injectScheduled = false;
+      injecting = true;
+      try { injectButtons(); } finally { injecting = false; }
+    }, 250);
+  }
+
+  var observer = new MutationObserver(scheduleInject);
   observer.observe(document.body, { childList: true, subtree: true });
 
   window.addEventListener("storage", loadInstances);
   window.addEventListener("popstate", boot);
   setInterval(loadInstances, 15000);
+  setInterval(scheduleInject, 2000);
   setTimeout(boot, 700);
   setTimeout(boot, 2000);
 })();
