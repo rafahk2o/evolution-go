@@ -1331,7 +1331,14 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 }
 
 func (s *sendService) SendMediaUrl(data *MediaStruct, instance *instance_model.Instance) (*MessageSendStruct, error) {
-	return s.sendMediaUrlWithRetry(data, instance, 3)
+	maxRetries := 3
+	if data != nil {
+		switch strings.ToLower(strings.TrimSpace(data.Type)) {
+		case "video", "ptv", "document":
+			maxRetries = 6
+		}
+	}
+	return s.sendMediaUrlWithRetry(data, instance, maxRetries)
 }
 
 func (s *sendService) downloadMediaURL(rawURL string, instance *instance_model.Instance) (*http.Response, error) {
@@ -1374,18 +1381,32 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 
 		resp, err := s.downloadMediaURL(data.Url, instance)
 		if err != nil {
+			if attempt < maxRetries {
+				waitTime := time.Duration(attempt*2) * time.Second
+				s.loggerWrapper.GetLogger(instance.Id).LogWarn("[%s] Media URL download failed on attempt %d/%d: %v. Waiting %v before retry", instance.Id, attempt, maxRetries, err, waitTime)
+				time.Sleep(waitTime)
+				continue
+			}
 			return nil, err
 		}
-		defer resp.Body.Close()
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-			return nil, fmt.Errorf("failed to download media URL: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			resp.Body.Close()
+			err := fmt.Errorf("failed to download media URL: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			if attempt < maxRetries {
+				waitTime := time.Duration(attempt*2) * time.Second
+				s.loggerWrapper.GetLogger(instance.Id).LogWarn("[%s] %v. Waiting %v before retry", instance.Id, err, waitTime)
+				time.Sleep(waitTime)
+				continue
+			}
+			return nil, err
 		}
 
 		s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Download concluído em %v. Lendo dados...", instance.Id, time.Since(startTime))
 
 		downloadStart := time.Now()
 		fileData, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -1450,6 +1471,9 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 			}
 			uploadType = whatsmeow.MediaAudio
 		case "document":
+			if data.Filename == "" {
+				data.Filename = "file" + extensionFromMIME(mimeType)
+			}
 			uploadType = whatsmeow.MediaDocument
 		default:
 			return nil, errors.New("invalid media type")

@@ -85,6 +85,23 @@ func (h *Handler) Webhook(ctx *gin.Context) {
 	if messageID != "" {
 		messageID = "chatwoot_" + messageID
 	}
+
+	if shouldSendMediaAsync(payload) {
+		if h.chatwootClient != nil {
+			chatwootMsgID := stringValue(payload.ID)
+			conversationID := convertibleString(payload.Conversation["id"])
+			h.chatwootClient.RegisterOutgoing(chatwootMsgID, conversationID)
+		}
+		go func() {
+			if _, err := h.send(payload, instance, number, messageID); err != nil && h.chatwootClient != nil {
+				h.chatwootClient.Logger(instance.Id).LogError("[%s] chatwoot->wa async media send failed: %v", instance.Id, err)
+			}
+		}()
+		go h.markIncomingAsRead(payload, instance, number)
+		ctx.JSON(http.StatusOK, gin.H{"message": "accepted", "async": true})
+		return
+	}
+
 	message, err := h.send(payload, instance, number, messageID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -241,6 +258,20 @@ func shouldSendToWhatsApp(payload webhookPayload) bool {
 
 	messageType := strings.ToLower(stringValue(payload.MessageType))
 	return messageType == "outgoing" || messageType == "template" || messageType == "1" || messageType == "3"
+}
+
+func shouldSendMediaAsync(payload webhookPayload) bool {
+	attachment := firstSupportedAttachment(payload.Attachments)
+	if attachment == nil {
+		return false
+	}
+	mediaType := chatwootAttachmentType(stringValue(attachment["file_type"]))
+	if mediaType == "video" || mediaType == "document" {
+		return true
+	}
+	filename := strings.TrimSpace(stringValue(attachment["filename"]))
+	contentType := contentTypeFromFilename(filename)
+	return strings.HasPrefix(contentType, "video/") || contentType == "application/pdf"
 }
 
 func (h *Handler) send(payload webhookPayload, instance *instance_model.Instance, number string, messageID string) (interface{}, error) {
