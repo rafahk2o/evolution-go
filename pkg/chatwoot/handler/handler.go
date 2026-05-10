@@ -248,9 +248,14 @@ func (h *Handler) send(payload webhookPayload, instance *instance_model.Instance
 	if attachment != nil {
 		mediaURL := h.absoluteChatwootURL(instance, stringValue(attachment["data_url"]))
 		if mediaURL != "" {
-			if msg, err := h.sendChatwootMedia(payload, attachment, mediaURL, instance, number, messageID); err == nil {
-				return msg, nil
-			}
+			mediaType := chatwootAttachmentType(stringValue(attachment["file_type"]))
+			return h.sendService.SendMediaUrl(&send_service.MediaStruct{
+				Number:  number,
+				Url:     mediaURL,
+				Type:    mediaType,
+				Caption: payload.Content,
+				Id:      messageID,
+			}, instance)
 		}
 	}
 
@@ -264,144 +269,6 @@ func (h *Handler) send(payload webhookPayload, instance *instance_model.Instance
 		Text:   content,
 		Id:     messageID,
 	}, instance)
-}
-
-func (h *Handler) sendChatwootMedia(payload webhookPayload, attachment map[string]interface{}, mediaURL string, instance *instance_model.Instance, number, messageID string) (interface{}, error) {
-	if h.chatwootClient == nil {
-		return nil, fmt.Errorf("chatwoot client not configured")
-	}
-	logger := h.chatwootClient.Logger(instance.Id)
-
-	logger.LogInfo("[%s] chatwoot→wa: download %s", instance.Id, mediaURL)
-	fileData, downloadedCT, err := h.chatwootClient.DownloadMedia(mediaURL)
-	if err != nil || len(fileData) == 0 {
-		logger.LogWarn("[%s] chatwoot→wa: download failed (%v) — fallback para SendMediaUrl", instance.Id, err)
-		mediaType := chatwootAttachmentType(stringValue(attachment["file_type"]))
-		return h.sendService.SendMediaUrl(&send_service.MediaStruct{
-			Number:  number,
-			Url:     mediaURL,
-			Type:    mediaType,
-			Caption: payload.Content,
-			Id:      messageID,
-		}, instance)
-	}
-	logger.LogInfo("[%s] chatwoot→wa: download ok, %d bytes ct=%s", instance.Id, len(fileData), downloadedCT)
-
-	ct := strings.ToLower(strings.TrimSpace(stringValue(attachment["content_type"])))
-	if ct == "" {
-		ct = strings.ToLower(strings.TrimSpace(downloadedCT))
-	}
-	primaryType := pickWhatsAppMediaType(ct, stringValue(attachment["file_type"]))
-	filename := strings.TrimSpace(stringValue(attachment["filename"]))
-	if filename == "" {
-		filename = "file" + extensionFor(ct)
-	} else if !strings.Contains(filename, ".") {
-		filename = filename + extensionFor(ct)
-	}
-
-	build := func(mediaType string) *send_service.MediaStruct {
-		return &send_service.MediaStruct{
-			Number:   number,
-			Type:     mediaType,
-			Caption:  payload.Content,
-			Id:       messageID,
-			Filename: filename,
-		}
-	}
-
-	logger.LogInfo("[%s] chatwoot→wa: SendMediaFile type=%s filename=%s", instance.Id, primaryType, filename)
-	msg, err := h.sendService.SendMediaFile(build(primaryType), fileData, instance)
-	if err == nil {
-		return msg, nil
-	}
-	logger.LogWarn("[%s] chatwoot→wa: tipo %s falhou (%v), tentando como document", instance.Id, primaryType, err)
-
-	if primaryType != "document" {
-		if msg2, err2 := h.sendService.SendMediaFile(build("document"), fileData, instance); err2 == nil {
-			logger.LogInfo("[%s] chatwoot→wa: enviado como document", instance.Id)
-			return msg2, nil
-		} else {
-			logger.LogError("[%s] chatwoot→wa: document também falhou: %v", instance.Id, err2)
-			err = fmt.Errorf("primary=%v document=%v", err, err2)
-		}
-	}
-
-	return nil, err
-}
-
-func extensionFor(ct string) string {
-	switch ct {
-	case "image/jpeg", "image/jpg":
-		return ".jpg"
-	case "image/png":
-		return ".png"
-	case "image/webp":
-		return ".webp"
-	case "image/gif":
-		return ".gif"
-	case "image/heic", "image/heif":
-		return ".heic"
-	case "video/mp4":
-		return ".mp4"
-	case "video/quicktime":
-		return ".mov"
-	case "video/webm":
-		return ".webm"
-	case "video/3gpp":
-		return ".3gp"
-	case "audio/ogg":
-		return ".ogg"
-	case "audio/mpeg":
-		return ".mp3"
-	case "audio/mp4", "audio/m4a", "audio/x-m4a":
-		return ".m4a"
-	case "audio/wav", "audio/x-wav":
-		return ".wav"
-	case "audio/webm":
-		return ".webm"
-	case "audio/aac":
-		return ".aac"
-	case "application/pdf":
-		return ".pdf"
-	}
-	if i := strings.LastIndex(ct, "/"); i >= 0 && i+1 < len(ct) {
-		ext := ct[i+1:]
-		if len(ext) <= 6 {
-			return "." + ext
-		}
-	}
-	return ""
-}
-
-// pickWhatsAppMediaType escolhe entre image/video/audio/document baseado no
-// content-type. Formatos não suportados nativamente pelo WhatsApp (HEIC, MOV,
-// GIF como vídeo, etc.) caem em "document" pra que ao menos o arquivo chegue.
-func pickWhatsAppMediaType(contentType, chatwootType string) string {
-	ct := strings.ToLower(strings.TrimSpace(contentType))
-	switch ct {
-	case "image/jpeg", "image/jpg", "image/png", "image/webp":
-		return "image"
-	case "video/mp4":
-		return "video"
-	case "audio/ogg", "audio/mpeg", "audio/mp4", "audio/m4a", "audio/wav",
-		"audio/webm", "audio/aac", "audio/x-wav":
-		return "audio"
-	}
-	if strings.HasPrefix(ct, "image/") {
-		return "document"
-	}
-	if strings.HasPrefix(ct, "video/") {
-		return "document"
-	}
-	if strings.HasPrefix(ct, "audio/") {
-		return "audio"
-	}
-	// Fallback usando o tipo informado pelo Chatwoot
-	switch strings.ToLower(strings.TrimSpace(chatwootType)) {
-	case "image", "video", "audio":
-		return "document"
-	}
-	return "document"
 }
 
 func firstSupportedAttachment(attachments []map[string]interface{}) map[string]interface{} {
