@@ -119,7 +119,7 @@ func (h *Handler) Webhook(ctx *gin.Context) {
 		h.chatwootClient.RegisterOutgoing(chatwootMsgID, conversationID)
 	}
 
-	// Quando o agente responde no Chatwoot, marcar as mensagens incoming
+	// Quando oo agente responde no Chatwoot, marcar as mensagens incoming
 	// anteriores como lidas no WhatsApp (proxy: agent reply ⇒ tudo lido).
 	go h.markIncomingAsRead(payload, instance, number)
 
