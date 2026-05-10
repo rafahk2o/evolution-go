@@ -1303,6 +1303,29 @@ func (s *sendService) SendMediaUrl(data *MediaStruct, instance *instance_model.I
 	return s.sendMediaUrlWithRetry(data, instance, 3)
 }
 
+func (s *sendService) downloadMediaURL(rawURL string, instance *instance_model.Instance) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "evolution-go/1.0")
+	req.Header.Set("Accept", "*/*")
+	if instance != nil && instance.ChatwootAccountToken != "" && chatwootMediaURL(rawURL, instance.ChatwootURL) {
+		req.Header.Set("api_access_token", instance.ChatwootAccountToken)
+	}
+	return http.DefaultClient.Do(req)
+}
+
+func chatwootMediaURL(rawURL, baseURL string) bool {
+	rawURL = strings.TrimSpace(rawURL)
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if rawURL == "" {
+		return false
+	}
+	return (baseURL != "" && strings.HasPrefix(rawURL, baseURL+"/")) ||
+		strings.Contains(rawURL, "/rails/active_storage/")
+}
+
 func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instance_model.Instance, maxRetries int) (*MessageSendStruct, error) {
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] SendMediaUrl attempt %d/%d for URL: %s", instance.Id, attempt, maxRetries, data.Url)
@@ -1318,11 +1341,15 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 
 		s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Iniciando download da URL: %s", instance.Id, data.Url)
 
-		resp, err := http.Get(data.Url)
+		resp, err := s.downloadMediaURL(data.Url, instance)
 		if err != nil {
 			return nil, err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			return nil, fmt.Errorf("failed to download media URL: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
 
 		s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Download concluído em %v. Lendo dados...", instance.Id, time.Since(startTime))
 
@@ -1335,6 +1362,7 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 
 		mime, _ := mimetype.DetectReader(bytes.NewReader(fileData))
 		mimeType := mime.String()
+		mimeType = normalizeMediaMIME(mimeType, data.Filename, fileData)
 		if strings.HasSuffix(strings.ToLower(data.Url), ".mp4") {
 			mimeType = "video/mp4"
 		}

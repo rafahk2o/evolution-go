@@ -250,11 +250,12 @@ func (h *Handler) send(payload webhookPayload, instance *instance_model.Instance
 		if mediaURL != "" {
 			mediaType := chatwootAttachmentType(stringValue(attachment["file_type"]))
 			return h.sendService.SendMediaUrl(&send_service.MediaStruct{
-				Number:  number,
-				Url:     mediaURL,
-				Type:    mediaType,
-				Caption: payload.Content,
-				Id:      messageID,
+				Number:   number,
+				Url:      mediaURL,
+				Type:     mediaType,
+				Caption:  payload.Content,
+				Filename: strings.TrimSpace(stringValue(attachment["filename"])),
+				Id:       messageID,
 			}, instance)
 		}
 	}
