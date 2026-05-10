@@ -12,8 +12,12 @@
 
   var css = ""
     + ".cw-chatwoot-card{position:relative;}"
+    /* aperta a action bar para todos os ícones caberem (o flex-1 do Conectar/Desconectar é encurtado) */
+    + ".cw-action-bar>button{padding-left:8px!important;padding-right:8px!important;}"
+    + ".cw-action-bar>button.flex-1{flex:0 1 auto!important;min-width:0!important;padding:0 10px!important;}"
+    + ".cw-action-bar>div[class*=\"w-px\"]{flex:0 0 1px;}"
     + ".cw-action-sep{width:1px;background:var(--sidebar-border,#263241);align-self:stretch;flex:0 0 1px;}"
-    + ".cw-action-button{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 16px;border:0;background:transparent;color:#1f93ff;cursor:pointer;border-radius:0;line-height:1;transition:background .15s ease;}"
+    + ".cw-action-button{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 8px;border:0;background:transparent;color:#1f93ff;cursor:pointer;border-radius:0;line-height:1;transition:background .15s ease;flex:0 0 auto;}"
     + ".cw-action-button:hover{background:rgba(31,147,255,.12);}"
     + ".cw-action-button img{width:18px;height:18px;object-fit:contain;display:block;}"
     + ".cw-action-button span{display:none;}"
@@ -148,6 +152,7 @@
 
       var actions = actionRow(card);
       if (!actions || actions === card) return;
+      actions.classList.add("cw-action-bar");
 
       var button = actions.querySelector('[data-chatwoot-button-for="' + instance.id + '"]');
       if (!button) {
