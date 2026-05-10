@@ -8,12 +8,16 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
+	stddraw "image/draw"
 	"image/jpeg"
 	"image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,7 +33,10 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
 	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/math/fixed"
 	"golang.org/x/net/html"
 	"google.golang.org/protobuf/proto"
 )
@@ -909,6 +916,139 @@ func generateImageThumbnail(data []byte) []byte {
 	return buf.Bytes()
 }
 
+func generateVideoThumbnail(data []byte) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+
+	dir, err := os.MkdirTemp("", "evo-video-thumb-*")
+	if err != nil {
+		return nil
+	}
+	defer os.RemoveAll(dir)
+
+	input := filepath.Join(dir, "input")
+	if err := os.WriteFile(input, data, 0600); err != nil {
+		return nil
+	}
+	output := filepath.Join(dir, "thumb.jpg")
+
+	cmd := exec.Command("ffmpeg",
+		"-hide_banner",
+		"-loglevel", "error",
+		"-ss", "00:00:01",
+		"-i", input,
+		"-frames:v", "1",
+		"-vf", "scale=320:-2:force_original_aspect_ratio=decrease",
+		output,
+	)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil
+	}
+	thumb, err := os.ReadFile(output)
+	if err != nil || len(thumb) == 0 {
+		return nil
+	}
+	if resized := generateImageThumbnail(thumb); len(resized) > 0 {
+		return resized
+	}
+	return thumb
+}
+
+func generatePDFThumbnail(data []byte) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+	if thumb := renderPDFThumbnail(data); len(thumb) > 0 {
+		return thumb
+	}
+	return generatePDFPlaceholderThumbnail()
+}
+
+func renderPDFThumbnail(data []byte) []byte {
+	dir, err := os.MkdirTemp("", "evo-pdf-thumb-*")
+	if err != nil {
+		return nil
+	}
+	defer os.RemoveAll(dir)
+
+	input := filepath.Join(dir, "input.pdf")
+	if err := os.WriteFile(input, data, 0600); err != nil {
+		return nil
+	}
+
+	if thumb := renderPDFThumbnailWithPdftoppm(input, dir); len(thumb) > 0 {
+		return thumb
+	}
+	if thumb := renderPDFThumbnailWithImageMagick(input, filepath.Join(dir, "magick.jpg"), "magick"); len(thumb) > 0 {
+		return thumb
+	}
+	return renderPDFThumbnailWithImageMagick(input, filepath.Join(dir, "convert.jpg"), "convert")
+}
+
+func renderPDFThumbnailWithPdftoppm(input, dir string) []byte {
+	prefix := filepath.Join(dir, "page")
+	cmd := exec.Command("pdftoppm", "-jpeg", "-singlefile", "-f", "1", "-l", "1", "-scale-to", "320", input, prefix)
+	if err := cmd.Run(); err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(prefix + ".jpg")
+	if err != nil {
+		return nil
+	}
+	return generateImageThumbnail(data)
+}
+
+func renderPDFThumbnailWithImageMagick(input, output, binary string) []byte {
+	cmd := exec.Command(binary, input+"[0]", "-thumbnail", "320x320", output)
+	if err := cmd.Run(); err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(output)
+	if err != nil {
+		return nil
+	}
+	return generateImageThumbnail(data)
+}
+
+func generatePDFPlaceholderThumbnail() []byte {
+	const size = 100
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	stddraw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 245, G: 247, B: 250, A: 255}}, image.Point{}, stddraw.Src)
+
+	page := image.Rect(20, 12, 80, 88)
+	stddraw.Draw(img, page, &image.Uniform{C: color.White}, image.Point{}, stddraw.Src)
+	drawRectBorder(img, page, color.RGBA{R: 198, G: 205, B: 214, A: 255})
+	stddraw.Draw(img, image.Rect(20, 58, 80, 76), &image.Uniform{C: color.RGBA{R: 210, G: 43, B: 43, A: 255}}, image.Point{}, stddraw.Src)
+
+	fold := image.Rect(64, 12, 80, 28)
+	stddraw.Draw(img, fold, &image.Uniform{C: color.RGBA{R: 229, G: 234, B: 240, A: 255}}, image.Point{}, stddraw.Src)
+	drawRectBorder(img, fold, color.RGBA{R: 198, G: 205, B: 214, A: 255})
+
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(color.White),
+		Face: basicfont.Face7x13,
+		Dot:  fixed.P(36, 71),
+	}
+	d.DrawString("PDF")
+
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 70}); err != nil {
+		return nil
+	}
+	return buf.Bytes()
+}
+
+func drawRectBorder(img *image.RGBA, r image.Rectangle, c color.Color) {
+	stddraw.Draw(img, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+1), &image.Uniform{C: c}, image.Point{}, stddraw.Src)
+	stddraw.Draw(img, image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y), &image.Uniform{C: c}, image.Point{}, stddraw.Src)
+	stddraw.Draw(img, image.Rect(r.Min.X, r.Min.Y, r.Min.X+1, r.Max.Y), &image.Uniform{C: c}, image.Point{}, stddraw.Src)
+	stddraw.Draw(img, image.Rect(r.Max.X-1, r.Min.Y, r.Max.X, r.Max.Y), &image.Uniform{C: c}, image.Point{}, stddraw.Src)
+}
+
 func defaultAudioStreamingSidecar() []byte {
 	return []byte("QpmXDsU7YLagdg==")
 }
@@ -952,6 +1092,11 @@ func normalizeMediaMIME(mimeType, filename string, data []byte) string {
 		return "audio/wav"
 	}
 	return mimeType
+}
+
+func isPDFMedia(mimeType, filename string) bool {
+	return strings.EqualFold(strings.TrimSpace(mimeType), "application/pdf") ||
+		strings.HasSuffix(strings.ToLower(strings.TrimSpace(filename)), ".pdf")
 }
 
 func extensionFromMIME(mimeType string) string {
@@ -1099,6 +1244,7 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 				return nil, errors.New(errMsg)
 			}
 			uploadType = whatsmeow.MediaVideo
+			jpegThumbnail = generateVideoThumbnail(fileData)
 		case "audio":
 			converterApiUrl := s.config.ApiAudioConverter
 			converterApiKey := s.config.ApiAudioConverterKey
@@ -1125,6 +1271,9 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 				data.Filename = "file" + extensionFromMIME(mimeType)
 			}
 			uploadType = whatsmeow.MediaDocument
+			if isPDFMedia(mimeType, data.Filename) {
+				jpegThumbnail = generatePDFThumbnail(fileData)
+			}
 		default:
 			return nil, errors.New("invalid media type")
 		}
@@ -1189,12 +1338,13 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 		case "video":
 			if isNewsletter {
 				media = &waE2E.Message{VideoMessage: &waE2E.VideoMessage{
-					Caption:    proto.String(data.Caption),
-					URL:        &uploaded.URL,
-					DirectPath: &uploaded.DirectPath,
-					Mimetype:   proto.String(mimeType),
-					FileSHA256: uploaded.FileSHA256,
-					FileLength: &uploaded.FileLength,
+					Caption:       proto.String(data.Caption),
+					URL:           &uploaded.URL,
+					DirectPath:    &uploaded.DirectPath,
+					Mimetype:      proto.String(mimeType),
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    &uploaded.FileLength,
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			} else {
 				media = &waE2E.Message{VideoMessage: &waE2E.VideoMessage{
@@ -1206,17 +1356,19 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 					FileEncSHA256: uploaded.FileEncSHA256,
 					FileSHA256:    uploaded.FileSHA256,
 					FileLength:    proto.Uint64(uint64(len(fileData))),
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			}
 			mediaType = "VideoMessage"
 		case "ptv":
 			if isNewsletter {
 				media = &waE2E.Message{PtvMessage: &waE2E.VideoMessage{
-					URL:        &uploaded.URL,
-					DirectPath: &uploaded.DirectPath,
-					Mimetype:   proto.String(mimeType),
-					FileSHA256: uploaded.FileSHA256,
-					FileLength: &uploaded.FileLength,
+					URL:           &uploaded.URL,
+					DirectPath:    &uploaded.DirectPath,
+					Mimetype:      proto.String(mimeType),
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    &uploaded.FileLength,
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			} else {
 				media = &waE2E.Message{PtvMessage: &waE2E.VideoMessage{
@@ -1227,6 +1379,7 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 					FileEncSHA256: uploaded.FileEncSHA256,
 					FileSHA256:    uploaded.FileSHA256,
 					FileLength:    proto.Uint64(uint64(len(fileData))),
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			}
 			mediaType = "PtvMessage"
@@ -1262,13 +1415,14 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 		case "document":
 			if isNewsletter {
 				media = &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
-					FileName:   &data.Filename,
-					Caption:    proto.String(data.Caption),
-					URL:        &uploaded.URL,
-					DirectPath: &uploaded.DirectPath,
-					Mimetype:   proto.String(mimeType),
-					FileSHA256: uploaded.FileSHA256,
-					FileLength: &uploaded.FileLength,
+					FileName:      &data.Filename,
+					Caption:       proto.String(data.Caption),
+					URL:           &uploaded.URL,
+					DirectPath:    &uploaded.DirectPath,
+					Mimetype:      proto.String(mimeType),
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    &uploaded.FileLength,
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			} else {
 				media = &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
@@ -1281,6 +1435,7 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 					FileEncSHA256: uploaded.FileEncSHA256,
 					FileSHA256:    uploaded.FileSHA256,
 					FileLength:    proto.Uint64(uint64(len(fileData))),
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			}
 
@@ -1423,6 +1578,7 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 
 		var uploadType whatsmeow.MediaType
 		var duration int
+		var jpegThumbnail []byte
 		audioPTT := false
 
 		processingStart := time.Now()
@@ -1436,6 +1592,7 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 				mimeType = "image/jpeg"
 			}
 			uploadType = whatsmeow.MediaImage
+			jpegThumbnail = generateImageThumbnail(fileData)
 
 		case "video", "ptv":
 			if mimeType != "video/mp4" {
@@ -1445,9 +1602,11 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 					data.Filename = "video" + extensionFromMIME(mimeType)
 				}
 				uploadType = whatsmeow.MediaDocument
+				jpegThumbnail = generateVideoThumbnail(fileData)
 				break
 			}
 			uploadType = whatsmeow.MediaVideo
+			jpegThumbnail = generateVideoThumbnail(fileData)
 		case "audio":
 			s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Iniciando conversão de áudio...", instance.Id)
 			converterApiUrl := s.config.ApiAudioConverter
@@ -1475,6 +1634,9 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 				data.Filename = "file" + extensionFromMIME(mimeType)
 			}
 			uploadType = whatsmeow.MediaDocument
+			if isPDFMedia(mimeType, data.Filename) {
+				jpegThumbnail = generatePDFThumbnail(fileData)
+			}
 		default:
 			return nil, errors.New("invalid media type")
 		}
@@ -1513,12 +1675,13 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 			if isNewsletter {
 				// Newsletter: sem criptografia (sem MediaKey e FileEncSHA256)
 				media = &waE2E.Message{ImageMessage: &waE2E.ImageMessage{
-					Caption:    proto.String(data.Caption),
-					URL:        &uploaded.URL,
-					DirectPath: &uploaded.DirectPath,
-					Mimetype:   proto.String(mimeType),
-					FileSHA256: uploaded.FileSHA256,
-					FileLength: &uploaded.FileLength,
+					Caption:       proto.String(data.Caption),
+					URL:           &uploaded.URL,
+					DirectPath:    &uploaded.DirectPath,
+					Mimetype:      proto.String(mimeType),
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    &uploaded.FileLength,
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			} else {
 				// Normal: com criptografia
@@ -1531,18 +1694,20 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 					FileEncSHA256: uploaded.FileEncSHA256,
 					FileSHA256:    uploaded.FileSHA256,
 					FileLength:    proto.Uint64(uint64(len(fileData))),
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			}
 			mediaType = "ImageMessage"
 		case "video":
 			if isNewsletter {
 				media = &waE2E.Message{VideoMessage: &waE2E.VideoMessage{
-					Caption:    proto.String(data.Caption),
-					URL:        &uploaded.URL,
-					DirectPath: &uploaded.DirectPath,
-					Mimetype:   proto.String(mimeType),
-					FileSHA256: uploaded.FileSHA256,
-					FileLength: &uploaded.FileLength,
+					Caption:       proto.String(data.Caption),
+					URL:           &uploaded.URL,
+					DirectPath:    &uploaded.DirectPath,
+					Mimetype:      proto.String(mimeType),
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    &uploaded.FileLength,
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			} else {
 				media = &waE2E.Message{VideoMessage: &waE2E.VideoMessage{
@@ -1554,17 +1719,19 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 					FileEncSHA256: uploaded.FileEncSHA256,
 					FileSHA256:    uploaded.FileSHA256,
 					FileLength:    proto.Uint64(uint64(len(fileData))),
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			}
 			mediaType = "VideoMessage"
 		case "ptv":
 			if isNewsletter {
 				media = &waE2E.Message{PtvMessage: &waE2E.VideoMessage{
-					URL:        &uploaded.URL,
-					DirectPath: &uploaded.DirectPath,
-					Mimetype:   proto.String(mimeType),
-					FileSHA256: uploaded.FileSHA256,
-					FileLength: &uploaded.FileLength,
+					URL:           &uploaded.URL,
+					DirectPath:    &uploaded.DirectPath,
+					Mimetype:      proto.String(mimeType),
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    &uploaded.FileLength,
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			} else {
 				media = &waE2E.Message{PtvMessage: &waE2E.VideoMessage{
@@ -1575,6 +1742,7 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 					FileEncSHA256: uploaded.FileEncSHA256,
 					FileSHA256:    uploaded.FileSHA256,
 					FileLength:    proto.Uint64(uint64(len(fileData))),
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			}
 			mediaType = "PtvMessage"
@@ -1610,13 +1778,14 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 		case "document":
 			if isNewsletter {
 				media = &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
-					URL:        &uploaded.URL,
-					FileName:   &data.Filename,
-					Caption:    proto.String(data.Caption),
-					DirectPath: &uploaded.DirectPath,
-					Mimetype:   proto.String(mimeType),
-					FileSHA256: uploaded.FileSHA256,
-					FileLength: &uploaded.FileLength,
+					URL:           &uploaded.URL,
+					FileName:      &data.Filename,
+					Caption:       proto.String(data.Caption),
+					DirectPath:    &uploaded.DirectPath,
+					Mimetype:      proto.String(mimeType),
+					FileSHA256:    uploaded.FileSHA256,
+					FileLength:    &uploaded.FileLength,
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			} else {
 				media = &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
@@ -1629,6 +1798,7 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 					FileEncSHA256: uploaded.FileEncSHA256,
 					FileSHA256:    uploaded.FileSHA256,
 					FileLength:    proto.Uint64(uint64(len(fileData))),
+					JPEGThumbnail: jpegThumbnail,
 				}}
 			}
 

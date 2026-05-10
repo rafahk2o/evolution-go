@@ -21,7 +21,7 @@ RUN CGO_ENABLED=1 go build -ldflags "-X main.version=${VERSION}" -o server ./cmd
 
 FROM alpine:3.19.1 AS final
 
-RUN apk update && apk add --no-cache tzdata ffmpeg libjpeg-turbo libwebp
+RUN apk update && apk add --no-cache tzdata ffmpeg poppler-utils libjpeg-turbo libwebp
 
 WORKDIR /app
 
