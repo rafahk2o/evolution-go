@@ -577,17 +577,34 @@ func (c *Client) downloadMedia(rawURL string) ([]byte, error) {
 	return body, err
 }
 
+func (c *Client) DownloadChatwootMedia(rawURL, accountToken string) ([]byte, string, error) {
+	headers := map[string]string{}
+	if strings.TrimSpace(accountToken) != "" {
+		headers["api_access_token"] = accountToken
+	}
+	return c.downloadMediaWithHeaders(rawURL, headers)
+}
+
 // DownloadMedia faz GET na URL com User-Agent e timeout estendido,
 // retorna os bytes e o Content-Type da resposta.
 // Usado tanto pelo fluxo WA→Chatwoot (mediaUrl do Minio) quanto pelo
 // fluxo Chatwoot→WA (data_url da ActiveStorage do Chatwoot).
 func (c *Client) DownloadMedia(rawURL string) ([]byte, string, error) {
+	return c.downloadMediaWithHeaders(rawURL, nil)
+}
+
+func (c *Client) downloadMediaWithHeaders(rawURL string, headers map[string]string) ([]byte, string, error) {
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, "", err
 	}
 	req.Header.Set("User-Agent", "evolution-go/1.0")
 	req.Header.Set("Accept", "*/*")
+	for key, value := range headers {
+		if strings.TrimSpace(value) != "" {
+			req.Header.Set(key, value)
+		}
+	}
 
 	resp, err := c.mediaClient.Do(req)
 	if err != nil {

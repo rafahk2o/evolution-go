@@ -248,9 +248,11 @@ func (h *Handler) send(payload webhookPayload, instance *instance_model.Instance
 	if attachment != nil {
 		mediaURL := h.absoluteChatwootURL(instance, stringValue(attachment["data_url"]))
 		if mediaURL != "" {
-			if msg, err := h.sendChatwootMedia(payload, attachment, mediaURL, instance, number, messageID); err == nil {
-				return msg, nil
+			msg, err := h.sendChatwootMedia(payload, attachment, mediaURL, instance, number, messageID)
+			if err != nil {
+				return nil, err
 			}
+			return msg, nil
 		}
 	}
 
@@ -273,23 +275,27 @@ func (h *Handler) sendChatwootMedia(payload webhookPayload, attachment map[strin
 	logger := h.chatwootClient.Logger(instance.Id)
 
 	logger.LogInfo("[%s] chatwoot->wa: download %s", instance.Id, mediaURL)
-	fileData, downloadedCT, err := h.chatwootClient.DownloadMedia(mediaURL)
+	fileData, downloadedCT, err := h.chatwootClient.DownloadChatwootMedia(mediaURL, instance.ChatwootAccountToken)
 	if err != nil || len(fileData) == 0 {
-		logger.LogWarn("[%s] chatwoot->wa: download failed (%v); falling back to SendMediaUrl", instance.Id, err)
-		mediaType := chatwootAttachmentType(stringValue(attachment["file_type"]))
-		return h.sendService.SendMediaUrl(&send_service.MediaStruct{
-			Number:  number,
-			Url:     mediaURL,
-			Type:    mediaType,
-			Caption: payload.Content,
-			Id:      messageID,
-		}, instance)
+		logger.LogWarn("[%s] chatwoot->wa: download failed (%v)", instance.Id, err)
+		if err == nil {
+			err = fmt.Errorf("empty response body")
+		}
+		return nil, fmt.Errorf("failed to download chatwoot media: %w", err)
 	}
-	logger.LogInfo("[%s] chatwoot->wa: download ok, %d bytes ct=%s", instance.Id, len(fileData), downloadedCT)
+	detectedCT := strings.ToLower(strings.TrimSpace(http.DetectContentType(fileData)))
+	logger.LogInfo("[%s] chatwoot->wa: download ok, %d bytes ct=%s detected=%s", instance.Id, len(fileData), downloadedCT, detectedCT)
+
+	if invalidAttachmentDownload(downloadedCT, detectedCT, fileData) {
+		return nil, fmt.Errorf("chatwoot media download returned non-media content: header=%s detected=%s size=%d", downloadedCT, detectedCT, len(fileData))
+	}
 
 	ct := strings.ToLower(strings.TrimSpace(stringValue(attachment["content_type"])))
-	if ct == "" {
+	if ct == "" || ct == "application/octet-stream" {
 		ct = strings.ToLower(strings.TrimSpace(downloadedCT))
+	}
+	if ct == "" || ct == "application/octet-stream" {
+		ct = detectedCT
 	}
 	primaryType := pickWhatsAppMediaType(ct, stringValue(attachment["file_type"]))
 	filename := strings.TrimSpace(stringValue(attachment["filename"]))
@@ -327,6 +333,32 @@ func (h *Handler) sendChatwootMedia(payload webhookPayload, attachment map[strin
 	}
 
 	return nil, err
+}
+
+func invalidAttachmentDownload(headerCT, detectedCT string, data []byte) bool {
+	headerCT = strings.ToLower(strings.TrimSpace(headerCT))
+	detectedCT = strings.ToLower(strings.TrimSpace(detectedCT))
+	for _, ct := range []string{headerCT, detectedCT} {
+		if ct == "" {
+			continue
+		}
+		if strings.HasPrefix(ct, "text/") ||
+			strings.Contains(ct, "html") ||
+			strings.Contains(ct, "json") ||
+			strings.Contains(ct, "xml") {
+			return true
+		}
+	}
+
+	limit := len(data)
+	if limit > 256 {
+		limit = 256
+	}
+	prefix := strings.ToLower(strings.TrimSpace(string(data[:limit])))
+	return strings.HasPrefix(prefix, "<!doctype") ||
+		strings.HasPrefix(prefix, "<html") ||
+		strings.HasPrefix(prefix, "{") ||
+		strings.HasPrefix(prefix, "[")
 }
 
 func extensionFor(ct string) string {
