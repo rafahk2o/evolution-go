@@ -103,7 +103,16 @@ func (c *Client) RefreshAttachmentMessage(instance *instance_model.Instance, con
 		return
 	}
 
-	for _, delay := range []time.Duration{250 * time.Millisecond, 1 * time.Second, 2500 * time.Millisecond, 5 * time.Second} {
+	for _, delay := range []time.Duration{
+		250 * time.Millisecond,
+		1 * time.Second,
+		2500 * time.Millisecond,
+		5 * time.Second,
+		10 * time.Second,
+		15 * time.Second,
+		20 * time.Second,
+		30 * time.Second,
+	} {
 		go func(delay time.Duration) {
 			time.Sleep(delay)
 			if err := c.refreshChatwootAttachmentMessage(settings, conversationID, messageID); err != nil {
