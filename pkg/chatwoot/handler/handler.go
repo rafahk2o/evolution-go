@@ -248,11 +248,14 @@ func (h *Handler) send(payload webhookPayload, instance *instance_model.Instance
 	if attachment != nil {
 		mediaURL := h.absoluteChatwootURL(instance, stringValue(attachment["data_url"]))
 		if mediaURL != "" {
-			msg, err := h.sendChatwootMedia(payload, attachment, mediaURL, instance, number, messageID)
-			if err != nil {
-				return nil, err
-			}
-			return msg, nil
+			mediaType := chatwootAttachmentType(stringValue(attachment["file_type"]))
+			return h.sendService.SendMediaUrl(&send_service.MediaStruct{
+				Number:  number,
+				Url:     mediaURL,
+				Type:    mediaType,
+				Caption: payload.Content,
+				Id:      messageID,
+			}, instance)
 		}
 	}
 
