@@ -12,11 +12,11 @@
 
   var css = ""
     + ".cw-chatwoot-card{position:relative;}"
-    + ".cw-card-button{position:absolute;top:6px;left:6px;z-index:5;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:1px solid rgba(37,211,102,.45);border-radius:50%;background:rgba(17,24,39,.96);cursor:pointer;opacity:0;pointer-events:none;transform:scale(.85);transition:opacity .15s ease,transform .15s ease,background .15s ease,border-color .15s ease;}"
-    + ".cw-card-button span{display:none;}"
-    + ".cw-card-button img{width:14px;height:14px;object-fit:contain;border-radius:50%;}"
-    + ".cw-chatwoot-card:hover .cw-card-button,.cw-chatwoot-card:focus-within .cw-card-button{opacity:1;pointer-events:auto;transform:scale(1);}"
-    + ".cw-card-button:hover{background:rgba(37,211,102,.18);border-color:rgba(37,211,102,.7);}"
+    + ".cw-action-sep{width:1px;background:var(--sidebar-border,#263241);align-self:stretch;flex:0 0 1px;}"
+    + ".cw-action-button{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 16px;border:0;background:transparent;color:#1f93ff;cursor:pointer;border-radius:0;line-height:1;transition:background .15s ease;}"
+    + ".cw-action-button:hover{background:rgba(31,147,255,.12);}"
+    + ".cw-action-button img{width:18px;height:18px;object-fit:contain;display:block;}"
+    + ".cw-action-button span{display:none;}"
     + ".cw-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:16px;}"
     + ".cw-modal{width:min(620px,100%);max-height:92vh;overflow:auto;background:#111827;border:1px solid #334155;border-radius:8px;color:#e5e7eb;box-shadow:0 24px 80px rgba(0,0,0,.55);}"
     + ".cw-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #263241;position:sticky;top:0;background:#111827;z-index:1;}"
@@ -145,22 +145,36 @@
       var card = findCard(instance);
       if (!card) return;
       card.classList.add("cw-chatwoot-card");
-      var button = document.querySelector('[data-chatwoot-button-for="' + instance.id + '"]');
+
+      var actions = actionRow(card);
+      if (!actions || actions === card) return;
+
+      var button = actions.querySelector('[data-chatwoot-button-for="' + instance.id + '"]');
       if (!button) {
         button = document.createElement("button");
         button.type = "button";
-        button.className = "cw-card-button";
+        button.className = "cw-action-button";
         button.dataset.chatwootButtonFor = instance.id;
         button.title = "Configurar Chatwoot";
-        button.innerHTML = '<img src="/assets/chatwoot-icon.png" alt=""> <span>Chatwoot</span>';
+        button.innerHTML = '<img src="/assets/chatwoot-icon.png" alt=""><span>Chatwoot</span>';
         button.addEventListener("click", function (event) {
           event.preventDefault();
           event.stopPropagation();
           openModal(instance);
         });
       }
-      if (button.parentElement !== card) {
-        card.appendChild(button);
+
+      // Posiciona como ÚLTIMOS filhos da barra (separador + botão).
+      // Pôr depois da lixeira evita conflito com a reconciliação do React.
+      if (actions.lastElementChild !== button) {
+        var sep = actions.querySelector('[data-chatwoot-sep-for="' + instance.id + '"]');
+        if (!sep) {
+          sep = document.createElement("div");
+          sep.className = "cw-action-sep";
+          sep.dataset.chatwootSepFor = instance.id;
+        }
+        actions.appendChild(sep);
+        actions.appendChild(button);
       }
     });
   }
