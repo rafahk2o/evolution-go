@@ -954,6 +954,34 @@ func normalizeMediaMIME(mimeType, filename string, data []byte) string {
 	return mimeType
 }
 
+func extensionFromMIME(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "video/mp4":
+		return ".mp4"
+	case "video/quicktime":
+		return ".mov"
+	case "video/webm":
+		return ".webm"
+	case "audio/ogg", "audio/ogg; codecs=opus":
+		return ".ogg"
+	case "audio/mpeg":
+		return ".mp3"
+	case "audio/mp4", "audio/m4a", "audio/x-m4a":
+		return ".m4a"
+	case "audio/wav", "audio/x-wav":
+		return ".wav"
+	case "application/pdf":
+		return ".pdf"
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	}
+	return ".bin"
+}
+
 func convertAudioToOpusWithDuration(inputData []byte) ([]byte, int, error) {
 	cmd := exec.Command("ffmpeg", "-i", "pipe:0",
 		"-f",
@@ -1093,6 +1121,9 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 			}
 			uploadType = whatsmeow.MediaAudio
 		case "document":
+			if data.Filename == "" {
+				data.Filename = "file" + extensionFromMIME(mimeType)
+			}
 			uploadType = whatsmeow.MediaDocument
 		default:
 			return nil, errors.New("invalid media type")
@@ -1371,6 +1402,7 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 
 		var uploadType whatsmeow.MediaType
 		var duration int
+		audioPTT := false
 
 		processingStart := time.Now()
 		switch data.Type {
@@ -1386,8 +1418,13 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 
 		case "video", "ptv":
 			if mimeType != "video/mp4" {
-				errMsg := fmt.Sprintf("Invalid file format: '%s'. Only 'video/mp4' are accepted", mimeType)
-				return nil, errors.New(errMsg)
+				s.loggerWrapper.GetLogger(instance.Id).LogWarn("[%s] video mime %s is not supported natively, sending as document", instance.Id, mimeType)
+				data.Type = "document"
+				if data.Filename == "" {
+					data.Filename = "video" + extensionFromMIME(mimeType)
+				}
+				uploadType = whatsmeow.MediaDocument
+				break
 			}
 			uploadType = whatsmeow.MediaVideo
 		case "audio":
@@ -1395,21 +1432,23 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 			converterApiUrl := s.config.ApiAudioConverter
 			converterApiKey := s.config.ApiAudioConverterKey
 			var convertedData []byte
-			var err error
+			var convErr error
 			if converterApiUrl == "" {
 				s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Usando conversão local...", instance.Id)
-				convertedData, duration, err = convertAudioToOpusWithDuration(fileData)
+				convertedData, duration, convErr = convertAudioToOpusWithDuration(fileData)
 			} else {
 				s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Usando API de conversão...", instance.Id)
-				convertedData, duration, err = convertAudioWithApi(converterApiUrl, converterApiKey, ConvertAudio{Base64: base64.StdEncoding.EncodeToString(fileData)})
+				convertedData, duration, convErr = convertAudioWithApi(converterApiUrl, converterApiKey, ConvertAudio{Base64: base64.StdEncoding.EncodeToString(fileData)})
 			}
-			if err != nil {
-				return nil, err
+			if convErr == nil {
+				fileData = convertedData
+				mimeType = "audio/ogg; codecs=opus"
+				audioPTT = true
+				s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Conversão de áudio concluída em %v", instance.Id, time.Since(processingStart))
+			} else {
+				s.loggerWrapper.GetLogger(instance.Id).LogWarn("[%s] audio conversion failed (%v), sending raw audio", instance.Id, convErr)
 			}
-			fileData = convertedData
-			mimeType = "audio/ogg; codecs=opus"
 			uploadType = whatsmeow.MediaAudio
-			s.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Conversão de áudio concluída em %v", instance.Id, time.Since(processingStart))
 		case "document":
 			uploadType = whatsmeow.MediaDocument
 		default:
@@ -1519,27 +1558,27 @@ func (s *sendService) sendMediaUrlWithRetry(data *MediaStruct, instance *instanc
 			if isNewsletter {
 				media = &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
 					URL:              &uploaded.URL,
-					PTT:              proto.Bool(true),
+					PTT:              proto.Bool(audioPTT),
 					DirectPath:       &uploaded.DirectPath,
 					Mimetype:         proto.String(mimeType),
 					FileSHA256:       uploaded.FileSHA256,
 					FileLength:       &uploaded.FileLength,
-					StreamingSidecar: []byte(*proto.String("QpmXDsU7YLagdg==")),
-					Waveform:         []byte(*proto.String("OjAnExISDgsKCAkJBwgkHAQEBBEFAwMNAxAcKCgkFzM0QUE4Jh4eKAoKChcLCwkeFgkJCQo3JiQmIiIRPz8/Ow==")),
+					StreamingSidecar: defaultAudioStreamingSidecar(),
+					Waveform:         defaultAudioWaveform(),
 					Seconds:          proto.Uint32(uint32(duration)),
 				}}
 			} else {
 				media = &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
 					URL:              proto.String(uploaded.URL),
-					PTT:              proto.Bool(true),
+					PTT:              proto.Bool(audioPTT),
 					DirectPath:       proto.String(uploaded.DirectPath),
 					MediaKey:         uploaded.MediaKey,
 					Mimetype:         proto.String(mimeType),
 					FileEncSHA256:    uploaded.FileEncSHA256,
 					FileSHA256:       uploaded.FileSHA256,
 					FileLength:       proto.Uint64(uploaded.FileLength),
-					StreamingSidecar: []byte(*proto.String("QpmXDsU7YLagdg==")),
-					Waveform:         []byte(*proto.String("OjAnExISDgsKCAkJBwgkHAQEBBEFAwMNAxAcKCgkFzM0QUE4Jh4eKAoKChcLCwkeFgkJCQo3JiQmIiIRPz8/Ow==")),
+					StreamingSidecar: defaultAudioStreamingSidecar(),
+					Waveform:         defaultAudioWaveform(),
 					Seconds:          proto.Uint32(uint32(duration)),
 				}}
 			}
