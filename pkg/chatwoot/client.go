@@ -356,7 +356,7 @@ func (c *Client) createIncomingMessage(settings *instance_model.ChatwootSettings
 
 	if message.Attachment != nil {
 		responseBody, err := c.postMultipartMessage(settings, path, message)
-		if err == nil {
+		if err == nil && isVideoMimetype(message.Attachment.Mimetype) {
 			c.scheduleAttachmentRefresh(settings, conversationID, responseBody)
 		}
 		return err
@@ -365,7 +365,10 @@ func (c *Client) createIncomingMessage(settings *instance_model.ChatwootSettings
 	body := map[string]string{
 		"content": message.Content,
 	}
-	_, err := c.doJSON(settings, http.MethodPost, path, body)
+	responseBody, err := c.doJSON(settings, http.MethodPost, path, body)
+	if err == nil {
+		c.markTextMessageDelivered(settings, conversationID, responseBody)
+	}
 	return err
 }
 
@@ -441,6 +444,27 @@ func (c *Client) scheduleAttachmentRefresh(settings *instance_model.ChatwootSett
 			if err := c.refreshChatwootAttachmentMessage(settings, strconv.Itoa(conversationID), messageID); err != nil {
 				c.loggerWrapper.GetLogger("").LogWarn("chatwoot attachment refresh failed: %v", err)
 			}
+		}
+	}()
+}
+
+func isVideoMimetype(mimetype string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(mimetype)), "video/")
+}
+
+func (c *Client) markTextMessageDelivered(settings *instance_model.ChatwootSettings, conversationID int, responseBody []byte) {
+	if settings == nil || settings.URL == "" || settings.AccountID == "" || settings.AccountToken == "" {
+		return
+	}
+	messageID := extractChatwootMessageID(responseBody)
+	if messageID == "" {
+		return
+	}
+
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		if err := c.refreshChatwootAttachmentMessage(settings, strconv.Itoa(conversationID), messageID); err != nil {
+			c.loggerWrapper.GetLogger("").LogWarn("chatwoot text status refresh failed: %v", err)
 		}
 	}()
 }
