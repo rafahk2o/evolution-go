@@ -437,10 +437,15 @@ func (c *Client) scheduleAttachmentRefresh(settings *instance_model.ChatwootSett
 		return
 	}
 
+	// Re-dispara message_updated em N momentos pra cobrir o tempo da
+	// análise assíncrona do ActiveStorage (extração de width/height do
+	// vídeo). Sem isso o player não renderiza na primeira chegada.
 	go func() {
-		time.Sleep(1500 * time.Millisecond)
-		if err := c.refreshChatwootAttachmentMessage(settings, strconv.Itoa(conversationID), messageID); err != nil {
-			c.loggerWrapper.GetLogger("").LogWarn("chatwoot attachment refresh failed: %v", err)
+		for _, delay := range []time.Duration{1500 * time.Millisecond, 4 * time.Second, 8 * time.Second} {
+			time.Sleep(delay)
+			if err := c.refreshChatwootAttachmentMessage(settings, strconv.Itoa(conversationID), messageID); err != nil {
+				c.loggerWrapper.GetLogger("").LogWarn("chatwoot attachment refresh failed: %v", err)
+			}
 		}
 	}()
 }
@@ -453,10 +458,14 @@ func (c *Client) refreshChatwootAttachmentMessage(settings *instance_model.Chatw
 		url.PathEscape(messageID),
 	)
 
-	body, _ := json.Marshal(map[string]interface{}{
-		"content_attributes": map[string]interface{}{
-			"evolution_attachment_refresh_at": time.Now().UnixNano(),
-		},
+	// O update do Chatwoot só aceita `status` e `external_error`
+	// (Api::V1::Accounts::Conversations::MessagesController#permitted_params).
+	// Usando `status: "delivered"` o Messages::StatusUpdateService roda
+	// message.update!, que dispara after_update_commit -> MESSAGE_UPDATED ->
+	// broadcast via ActionCable. O frontend re-busca o anexo, agora com
+	// width/height extraídos, e renderiza o player de vídeo.
+	body, _ := json.Marshal(map[string]string{
+		"status": "delivered",
 	})
 	req, err := http.NewRequest(http.MethodPatch, endpoint, bytes.NewReader(body))
 	if err != nil {
