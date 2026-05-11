@@ -272,6 +272,9 @@ func shouldSendMediaAsync(payload webhookPayload) bool {
 		return true
 	}
 	mediaType := chatwootAttachmentType(stringValue(attachment["file_type"]))
+	if mediaType == "image" {
+		return true
+	}
 	if mediaType == "document" {
 		return true
 	}
