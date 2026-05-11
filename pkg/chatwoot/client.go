@@ -356,7 +356,7 @@ func (c *Client) createIncomingMessage(settings *instance_model.ChatwootSettings
 
 	if message.Attachment != nil {
 		responseBody, err := c.postMultipartMessage(settings, path, message)
-		if err == nil && isVideoMimetype(message.Attachment.Mimetype) {
+		if err == nil && shouldRefreshAttachmentPreview(message.Attachment.Mimetype) {
 			c.scheduleAttachmentRefresh(settings, conversationID, responseBody)
 		}
 		return err
@@ -448,8 +448,11 @@ func (c *Client) scheduleAttachmentRefresh(settings *instance_model.ChatwootSett
 	}()
 }
 
-func isVideoMimetype(mimetype string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(mimetype)), "video/")
+func shouldRefreshAttachmentPreview(mimetype string) bool {
+	mimetype = strings.ToLower(strings.TrimSpace(mimetype))
+	return strings.HasPrefix(mimetype, "image/") ||
+		strings.HasPrefix(mimetype, "video/") ||
+		strings.HasPrefix(mimetype, "audio/")
 }
 
 func (c *Client) markTextMessageDelivered(settings *instance_model.ChatwootSettings, conversationID int, responseBody []byte) {
