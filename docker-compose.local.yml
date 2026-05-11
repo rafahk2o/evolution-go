@@ -28,6 +28,8 @@ services:
       LOGTYPE: console
       WADEBUG: INFO
       WEBHOOK_FILES: "true"
+      MEDIA_DOWNLOAD_TIMEOUT_SECONDS: "300"
+      MEDIA_DOWNLOAD_MAX_RETRIES: "6"
       CONNECT_ON_STARTUP: "false"
       OS_NAME: "Evolution GO"
       WEBHOOK_URL: ""

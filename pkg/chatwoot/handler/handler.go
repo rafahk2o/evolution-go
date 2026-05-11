@@ -265,18 +265,7 @@ func shouldSendToWhatsApp(payload webhookPayload) bool {
 
 func shouldSendMediaAsync(payload webhookPayload) bool {
 	attachment := firstSupportedAttachment(payload.Attachments)
-	if attachment == nil {
-		return false
-	}
-	if isVideoAttachment(payload) {
-		return true
-	}
-	mediaType := chatwootAttachmentType(stringValue(attachment["file_type"]))
-	if mediaType == "document" {
-		return true
-	}
-	filename := strings.TrimSpace(stringValue(attachment["filename"]))
-	return contentTypeFromFilename(filename) == "application/pdf"
+	return attachment != nil
 }
 
 func isVideoAttachment(payload webhookPayload) bool {
