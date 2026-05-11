@@ -364,7 +364,6 @@ func (c *Client) createIncomingMessage(settings *instance_model.ChatwootSettings
 
 	body := map[string]string{
 		"content": message.Content,
-		"echo_id": message.EchoID,
 	}
 	_, err := c.doJSON(settings, http.MethodPost, path, body)
 	return err
@@ -379,10 +378,6 @@ func (c *Client) postMultipartMessage(settings *instance_model.ChatwootSettings,
 			return nil, err
 		}
 	}
-	if message.EchoID != "" {
-		_ = mw.WriteField("echo_id", message.EchoID)
-	}
-
 	header := make(textproto.MIMEHeader)
 	filename := message.Attachment.Filename
 	if filename == "" {
