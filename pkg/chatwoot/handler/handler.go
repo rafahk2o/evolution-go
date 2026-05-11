@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -301,12 +302,16 @@ func (h *Handler) send(payload webhookPayload, instance *instance_model.Instance
 		mediaURL := h.absoluteChatwootURL(instance, stringValue(attachment["data_url"]))
 		if mediaURL != "" {
 			mediaType := chatwootAttachmentType(stringValue(attachment["file_type"]))
+			filename := strings.TrimSpace(stringValue(attachment["filename"]))
+			if filename == "" {
+				filename = filenameFromURL(mediaURL)
+			}
 			return h.sendService.SendMediaUrl(&send_service.MediaStruct{
 				Number:   number,
 				Url:      mediaURL,
 				Type:     mediaType,
 				Caption:  payload.Content,
-				Filename: strings.TrimSpace(stringValue(attachment["filename"])),
+				Filename: filename,
 				Id:       messageID,
 			}, instance)
 		}
@@ -354,6 +359,9 @@ func (h *Handler) sendChatwootMedia(payload webhookPayload, attachment map[strin
 		ct = detectedCT
 	}
 	filename := strings.TrimSpace(stringValue(attachment["filename"]))
+	if filename == "" {
+		filename = filenameFromURL(mediaURL)
+	}
 	if filename == "" {
 		filename = "file" + extensionFor(ct)
 	} else if !strings.Contains(filename, ".") {
@@ -420,6 +428,34 @@ func invalidAttachmentDownload(headerCT, detectedCT string, data []byte) bool {
 		strings.HasPrefix(prefix, "<html") ||
 		strings.HasPrefix(prefix, "{") ||
 		strings.HasPrefix(prefix, "[")
+}
+
+// filenameFromURL extrai o nome original do arquivo do path da URL
+// (ex.: ".../rails/active_storage/blobs/redirect/<signed_id>/contrato.pdf"
+// retorna "contrato.pdf"). URL-decodifica e ignora query strings.
+func filenameFromURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	p := strings.TrimRight(u.Path, "/")
+	idx := strings.LastIndex(p, "/")
+	if idx < 0 {
+		return ""
+	}
+	last := p[idx+1:]
+	if decoded, err := url.PathUnescape(last); err == nil {
+		last = decoded
+	}
+	// rejeita pedaços que claramente não são filename (ex.: só UUID/hex/numero)
+	if !strings.Contains(last, ".") {
+		return ""
+	}
+	return last
 }
 
 func extensionFor(ct string) string {
