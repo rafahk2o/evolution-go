@@ -21,28 +21,33 @@
     + ".cw-action-button:hover{background:rgba(31,147,255,.12);}"
     + ".cw-action-button img{width:18px;height:18px;object-fit:contain;display:block;}"
     + ".cw-action-button span{display:none;}"
-    + ".cw-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:16px;}"
-    + ".cw-modal{width:min(620px,100%);max-height:92vh;overflow:auto;background:#111827;border:1px solid #334155;border-radius:8px;color:#e5e7eb;box-shadow:0 24px 80px rgba(0,0,0,.55);}"
-    + ".cw-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #263241;position:sticky;top:0;background:#111827;z-index:1;}"
-    + ".cw-title{font-size:16px;font-weight:800;}"
-    + ".cw-close{border:0;background:transparent;color:#9ca3af;font-size:24px;line-height:1;cursor:pointer;}"
+    + ".cw-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.68);padding:16px;}"
+    + ".cw-modal{width:min(620px,100%);max-height:92vh;overflow:auto;background:var(--background,#0b1220);border:1px solid var(--border,var(--sidebar-border,#263241));border-radius:8px;color:var(--foreground,#e5e7eb);box-shadow:0 24px 80px rgba(0,0,0,.45);font-family:var(--font-sans,var(--default-font-family,ui-sans-serif,system-ui,sans-serif));}"
+    + ".cw-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border,var(--sidebar-border,#263241));position:sticky;top:0;background:var(--background,#0b1220);z-index:1;}"
+    + ".cw-title{font-size:16px;font-weight:600;color:var(--foreground,#e5e7eb);}"
+    + ".cw-close{border:0;background:transparent;color:var(--muted-foreground,#9ca3af);font-size:24px;line-height:1;cursor:pointer;}"
+    + ".cw-close:hover{color:var(--foreground,#e5e7eb);}"
     + ".cw-body{padding:16px 18px 18px;}"
-    + ".cw-section{border-top:1px solid #263241;padding-top:14px;margin-top:14px;}"
-    + ".cw-section-title{text-align:center;font-weight:800;font-size:14px;color:#f9fafb;margin-bottom:10px;}"
+    + ".cw-section{border-top:1px solid var(--border,var(--sidebar-border,#263241));padding-top:14px;margin-top:14px;}"
+    + ".cw-section-title{text-align:center;font-weight:600;font-size:14px;color:var(--foreground,#f9fafb);margin-bottom:10px;}"
     + ".cw-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}"
     + ".cw-field{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;}"
-    + ".cw-field label{font-size:12px;font-weight:700;color:#f3f4f6;}"
-    + ".cw-field input,.cw-field select{height:34px;border:1px solid #334155;border-radius:4px;background:#0b1220;color:#e5e7eb;padding:0 10px;font-size:13px;outline:none;}"
-    + ".cw-field input:focus,.cw-field select:focus{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.12);}"
-    + ".cw-help{font-size:11px;color:#94a3b8;line-height:1.4;}"
+    + ".cw-field label{font-size:12px;font-weight:600;color:var(--foreground,#f3f4f6);}"
+    + ".cw-field input,.cw-field select{height:34px;border:1px solid var(--input,var(--border,#334155));border-radius:6px;background:var(--background,#0b1220);color:var(--foreground,#e5e7eb);padding:0 10px;font-size:13px;outline:none;}"
+    + ".cw-field input:disabled,.cw-field select:disabled{opacity:.8;color:var(--muted-foreground,#94a3b8);}"
+    + ".cw-field input:focus,.cw-field select:focus{border-color:var(--ring,var(--primary,#22c55e));box-shadow:0 0 0 2px color-mix(in oklab,var(--ring,var(--primary,#22c55e)) 18%,transparent);}"
+    + ".cw-help{font-size:11px;color:var(--muted-foreground,#94a3b8);line-height:1.4;}"
     + ".cw-row{display:flex;align-items:center;gap:8px;}"
     + ".cw-row input{flex:1;}"
-    + ".cw-copy,.cw-toggle,.cw-save,.cw-cancel{border:0;border-radius:5px;height:34px;padding:0 12px;font-weight:800;font-size:12px;cursor:pointer;}"
-    + ".cw-copy,.cw-save{background:#2dd4a0;color:#062016;}"
-    + ".cw-cancel,.cw-toggle{background:#1f2937;color:#e5e7eb;border:1px solid #374151;}"
+    + ".cw-copy,.cw-toggle,.cw-save,.cw-cancel{border:0;border-radius:6px;height:34px;padding:0 12px;font-weight:600;font-size:12px;cursor:pointer;transition:background .15s ease,color .15s ease,border-color .15s ease;}"
+    + ".cw-copy,.cw-save{background:var(--primary,#22c55e);color:var(--primary-foreground,#062016);}"
+    + ".cw-copy:hover,.cw-save:hover{background:color-mix(in oklab,var(--primary,#22c55e) 90%,transparent);}"
+    + ".cw-cancel,.cw-toggle{background:var(--secondary,var(--sidebar,#1f2937));color:var(--secondary-foreground,var(--foreground,#e5e7eb));border:1px solid var(--border,var(--sidebar-border,#374151));}"
+    + ".cw-cancel:hover,.cw-toggle:hover{background:var(--accent,var(--sidebar-accent,#263241));color:var(--accent-foreground,var(--foreground,#e5e7eb));}"
     + ".cw-switch{display:inline-flex;align-items:center;gap:8px;margin:4px 0 8px;}"
-    + ".cw-switch input{width:16px;height:16px;accent-color:#22c55e;}"
-    + ".cw-footer{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #263241;padding:12px 18px;position:sticky;bottom:0;background:#111827;}"
+    + ".cw-switch input{width:16px;height:16px;accent-color:var(--primary,#22c55e);}"
+    + ".cw-switch span{color:var(--foreground,#e5e7eb);}"
+    + ".cw-footer{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border,var(--sidebar-border,#263241));padding:12px 18px;position:sticky;bottom:0;background:var(--background,#0b1220);}"
     + ".cw-alert{padding:10px 12px;border-radius:5px;margin-bottom:12px;font-size:12px;}"
     + ".cw-alert.error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fecaca;}"
     + ".cw-alert.ok{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#bbf7d0;}"
@@ -276,7 +281,7 @@
   }
 
   function renderLoading(instance) {
-    root().innerHTML = '<div class="cw-overlay"><div class="cw-modal"><div class="cw-header"><div class="cw-title">Chatwoot - ' + esc(instance.name) + '</div><button class="cw-close" type="button" data-cw-close>&times;</button></div><div class="cw-loading">Carregando configuracao...</div></div></div>';
+    root().innerHTML = '<div class="cw-overlay"><div class="cw-modal"><div class="cw-header"><div class="cw-title">Chatwoot - ' + esc(instance.name) + '</div><button class="cw-close" type="button" data-cw-close>&times;</button></div><div class="cw-loading">Carregando configuração...</div></div></div>';
     root().querySelector("[data-cw-close]").addEventListener("click", closeModal);
   }
 
@@ -290,35 +295,35 @@
     root().innerHTML = ''
       + '<div class="cw-overlay">'
       + '<div class="cw-modal">'
-      + '<div class="cw-header"><div class="cw-title">Edit App</div><button class="cw-close" type="button" data-cw-close>&times;</button></div>'
+      + '<div class="cw-header"><div class="cw-title">Editar aplicativo</div><button class="cw-close" type="button" data-cw-close>&times;</button></div>'
       + '<div class="cw-body">'
       + (message ? '<div class="cw-alert ' + (ok ? 'ok' : 'error') + '">' + esc(message) + '</div>' : '')
-      + '<div class="cw-field"><label>App ID</label><input data-cw="appId" value="' + esc(instance.name) + '" disabled></div>'
-      + '<div class="cw-field"><label>App Type</label><select disabled><option>ChatWoot</option></select></div>'
-      + '<label class="cw-switch"><input data-cw="enabled" type="checkbox" ' + (s.enabled ? "checked" : "") + '> <span>Enabled</span></label>'
-      + '<div class="cw-section"><div class="cw-section-title">ChatWoot Inbox - Webhook URL</div>'
-      + '<div class="cw-field"><label>Use this Webhook URL for your ChatWoot Inbox:</label><div class="cw-row"><input data-cw="webhook" value="' + esc(webhook) + '" readonly><button class="cw-copy" type="button" data-cw-copy="webhook">Copy</button></div><div class="cw-help">Configure esta URL no Webhook da API Inbox do Chatwoot.</div></div>'
+      + '<div class="cw-field"><label>ID do aplicativo</label><input data-cw="appId" value="' + esc(instance.name) + '" disabled></div>'
+      + '<div class="cw-field"><label>Tipo do aplicativo</label><select disabled><option>Chatwoot</option></select></div>'
+      + '<label class="cw-switch"><input data-cw="enabled" type="checkbox" ' + (s.enabled ? "checked" : "") + '> <span>Habilitado</span></label>'
+      + '<div class="cw-section"><div class="cw-section-title">Caixa de entrada Chatwoot - URL do webhook</div>'
+      + '<div class="cw-field"><label>Use esta URL no webhook da caixa de entrada do Chatwoot:</label><div class="cw-row"><input data-cw="webhook" value="' + esc(webhook) + '" readonly><button class="cw-copy" type="button" data-cw-copy="webhook">Copiar</button></div><div class="cw-help">Configure esta URL no webhook da API Inbox do Chatwoot.</div></div>'
       + '</div>'
-      + '<div class="cw-section"><div class="cw-section-title">Connection</div>'
-      + '<div class="cw-field"><label>ChatWoot URL</label><input data-cw="url" value="' + esc(s.url) + '" placeholder="https://app.melck.app"></div>'
+      + '<div class="cw-section"><div class="cw-section-title">Conexão</div>'
+      + '<div class="cw-field"><label>URL do Chatwoot</label><input data-cw="url" value="' + esc(s.url) + '" placeholder="https://app.melck.app"></div>'
       + '<div class="cw-grid">'
-      + '<div class="cw-field"><label>Account ID</label><input data-cw="accountId" value="' + esc(s.accountId) + '"></div>'
-      + '<div class="cw-field"><label>Account Token</label><input data-cw="accountToken" type="password" value="' + esc(s.accountToken) + '"></div>'
-      + '<div class="cw-field"><label>Inbox ID</label><input data-cw="inboxId" value="' + esc(s.inboxId) + '"></div>'
-      + '<div class="cw-field"><label>Inbox Identifier</label><input data-cw="inboxIdentifier" type="password" value="' + esc(s.inboxIdentifier) + '"></div>'
+      + '<div class="cw-field"><label>ID da conta</label><input data-cw="accountId" value="' + esc(s.accountId) + '"></div>'
+      + '<div class="cw-field"><label>Token da conta</label><input data-cw="accountToken" type="password" value="' + esc(s.accountToken) + '"></div>'
+      + '<div class="cw-field"><label>ID da caixa de entrada</label><input data-cw="inboxId" value="' + esc(s.inboxId) + '"></div>'
+      + '<div class="cw-field"><label>Identificador da caixa de entrada</label><input data-cw="inboxIdentifier" type="password" value="' + esc(s.inboxIdentifier) + '"></div>'
       + '</div>'
       + '<div class="cw-grid">'
-      + '<div class="cw-field"><label>Webhook Token</label><input data-cw="webhookToken" value="' + esc(s.webhookToken) + '"></div>'
+      + '<div class="cw-field"><label>Token do webhook</label><input data-cw="webhookToken" value="' + esc(s.webhookToken) + '"></div>'
       + '<div class="cw-field"><label>HMAC Token</label><input data-cw="hmacToken" type="password" value="' + esc(s.hmacToken) + '"></div>'
       + '</div>'
       + '</div>'
-      + '<div class="cw-section"><div class="cw-section-title">Conversations</div>'
-      + '<label class="cw-switch"><input data-cw="readMessages" type="checkbox" ' + (a.readMessages ? "checked" : "") + '> <span>Confirmacao de leitura no WhatsApp (riscos azuis)</span></label>'
-      + '<div class="cw-help">Quando ativado, mensagens recebidas no WhatsApp sao marcadas como lidas automaticamente pela instancia.</div>'
+      + '<div class="cw-section"><div class="cw-section-title">Conversas</div>'
+      + '<label class="cw-switch"><input data-cw="readMessages" type="checkbox" ' + (a.readMessages ? "checked" : "") + '> <span>Confirmação de leitura no WhatsApp (tiques azuis)</span></label>'
+      + '<div class="cw-help">Quando ativado, mensagens recebidas no WhatsApp são marcadas como lidas automaticamente pela instância.</div>'
       + '<label class="cw-switch"><input data-cw="enableGroups" type="checkbox" ' + (s.enableGroups ? "checked" : "") + '> <span>Sincronizar grupos</span></label>'
       + '</div>'
       + '</div>'
-      + '<div class="cw-footer"><button class="cw-cancel" type="button" data-cw-close>Cancel</button><button class="cw-save" type="button" data-cw-save>Save</button></div>'
+      + '<div class="cw-footer"><button class="cw-cancel" type="button" data-cw-close>Cancelar</button><button class="cw-save" type="button" data-cw-save>Salvar</button></div>'
       + '</div></div>';
 
     Array.prototype.slice.call(root().querySelectorAll("[data-cw-close]")).forEach(function (button) {
@@ -364,7 +369,7 @@
     });
 
     if (settings.enabled && (!settings.url || !settings.inboxIdentifier)) {
-      renderModal("Informe ChatWoot URL e Inbox Identifier para ativar.", false);
+      renderModal("Informe a URL do Chatwoot e o identificador da caixa de entrada para ativar.", false);
       return;
     }
 
