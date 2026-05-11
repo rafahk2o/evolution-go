@@ -1488,14 +1488,19 @@ func (s *sendService) sendMediaFileWithRetry(data *MediaStruct, fileData []byte,
 }
 
 func (s *sendService) SendMediaUrl(data *MediaStruct, instance *instance_model.Instance) (*MessageSendStruct, error) {
-	return s.sendMediaUrlWithRetry(data, instance, mediaURLMaxRetries())
+	maxRetries := 3
+	if data != nil {
+		switch strings.ToLower(strings.TrimSpace(data.Type)) {
+		case "video", "ptv", "document":
+			maxRetries = 6
+		}
+	}
+	return s.sendMediaUrlWithRetry(data, instance, maxRetries)
 }
 
 func (s *sendService) downloadMediaURL(rawURL string, instance *instance_model.Instance) (*http.Response, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), mediaDownloadTimeout())
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
-		cancel()
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "evolution-go/1.0")
@@ -1503,50 +1508,7 @@ func (s *sendService) downloadMediaURL(rawURL string, instance *instance_model.I
 	if instance != nil && instance.ChatwootAccountToken != "" && chatwootMediaURL(rawURL, instance.ChatwootURL) {
 		req.Header.Set("api_access_token", instance.ChatwootAccountToken)
 	}
-	resp, err := mediaDownloadHTTPClient().Do(req)
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	resp.Body = &cancelOnCloseReadCloser{ReadCloser: resp.Body, cancel: cancel}
-	return resp, nil
-}
-
-func mediaDownloadTimeout() time.Duration {
-	seconds := 300
-	if raw := strings.TrimSpace(os.Getenv("MEDIA_DOWNLOAD_TIMEOUT_SECONDS")); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			seconds = parsed
-		}
-	}
-	return time.Duration(seconds) * time.Second
-}
-
-func mediaURLMaxRetries() int {
-	retries := 6
-	if raw := strings.TrimSpace(os.Getenv("MEDIA_DOWNLOAD_MAX_RETRIES")); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			retries = parsed
-		}
-	}
-	return retries
-}
-
-func mediaDownloadHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout: mediaDownloadTimeout() + 15*time.Second,
-	}
-}
-
-type cancelOnCloseReadCloser struct {
-	io.ReadCloser
-	cancel context.CancelFunc
-}
-
-func (r *cancelOnCloseReadCloser) Close() error {
-	err := r.ReadCloser.Close()
-	r.cancel()
-	return err
+	return http.DefaultClient.Do(req)
 }
 
 func chatwootMediaURL(rawURL, baseURL string) bool {
