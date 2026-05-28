@@ -293,12 +293,32 @@
       const newKeyBox = document.getElementById("newKeyBox");
       const newKey = document.getElementById("newKey");
 
-      function readManagerAuth() {
+      function readManagerAuthRaw() {
         try {
           return JSON.parse(localStorage.getItem("evolution-auth") || "{}");
         } catch {
           return {};
         }
+      }
+
+      function readManagerAuth() {
+        const raw = readManagerAuthRaw();
+        if (raw && raw.state && typeof raw.state === "object") return raw.state;
+        return raw || {};
+      }
+
+      function writeManagerAuth(partial) {
+        const raw = readManagerAuthRaw();
+        const current =
+          raw && raw.state && typeof raw.state === "object"
+            ? raw.state
+            : raw || {};
+        const nextState = { ...current, ...partial };
+        const version = raw && typeof raw.version === "number" ? raw.version : 0;
+        localStorage.setItem(
+          "evolution-auth",
+          JSON.stringify({ state: nextState, version }),
+        );
       }
 
       function getBaseUrl() {
@@ -430,15 +450,11 @@
       masterKeyInput.value = auth.apiKey || "";
 
       document.getElementById("saveKey").addEventListener("click", () => {
-        localStorage.setItem(
-          "evolution-auth",
-          JSON.stringify({
-            ...readManagerAuth(),
-            apiUrl: getBaseUrl(),
-            apiKey: getMasterKey(),
-            isAuthenticated: Boolean(getMasterKey()),
-          }),
-        );
+        writeManagerAuth({
+          apiUrl: getBaseUrl(),
+          apiKey: getMasterKey(),
+          isAuthenticated: Boolean(getMasterKey()),
+        });
         loadCompanies();
       });
       document.getElementById("reload").addEventListener("click", loadCompanies);

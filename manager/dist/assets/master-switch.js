@@ -154,7 +154,9 @@
 
   function readManagerAuth() {
     try {
-      return JSON.parse(localStorage.getItem("evolution-auth") || "{}");
+      var raw = JSON.parse(localStorage.getItem("evolution-auth") || "{}");
+      if (raw && raw.state && typeof raw.state === "object") return raw.state;
+      return raw || {};
     } catch (err) {
       return {};
     }
