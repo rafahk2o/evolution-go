@@ -235,7 +235,7 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 
 	routes.NewRouter(
 		auth_middleware.NewMiddleware(config, companyService, instanceService),
-		company_handler.NewCompanyHandler(companyService),
+		company_handler.NewCompanyHandler(companyService, instanceService),
 		instance_handler.NewInstanceHandler(instanceService, config),
 		user_handler.NewUserHandler(userService),
 		send_handler.NewSendHandler(sendMessageService),

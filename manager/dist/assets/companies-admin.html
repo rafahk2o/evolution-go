@@ -182,6 +182,55 @@
         display: none;
       }
 
+      .row-button {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        min-height: 32px;
+        padding: 6px 10px;
+      }
+
+      .row-button:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .badge {
+        border-radius: 999px;
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        padding: 3px 8px;
+        text-transform: uppercase;
+      }
+
+      .badge-ok {
+        background: rgba(0, 233, 149, 0.15);
+        color: var(--primary);
+      }
+
+      .badge-off {
+        background: rgba(255, 77, 94, 0.15);
+        color: var(--danger);
+      }
+
+      .instances-header {
+        align-items: center;
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .instances-header h2 {
+        margin: 0;
+      }
+
       @media (max-width: 840px) {
         header,
         main {
@@ -252,14 +301,38 @@
               <th>ID</th>
               <th>Status</th>
               <th>Criada em</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody id="companiesBody">
+            <tr>
+              <td colspan="5">Carregando...</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="instancesPanel" class="panel hidden" style="margin-top: 18px">
+        <div class="instances-header">
+          <h2>Instâncias de <span id="instancesCompanyName">-</span></h2>
+          <button id="closeInstances" class="row-button" type="button">Fechar</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>JID</th>
+              <th>Conexão</th>
+              <th>Criada em</th>
+            </tr>
+          </thead>
+          <tbody id="instancesBody">
             <tr>
               <td colspan="4">Carregando...</td>
             </tr>
           </tbody>
         </table>
+        <p id="instancesMessage" class="message"></p>
       </section>
     </main>
 
@@ -271,6 +344,11 @@
       const companiesBody = document.getElementById("companiesBody");
       const newKeyBox = document.getElementById("newKeyBox");
       const newKey = document.getElementById("newKey");
+      const instancesPanel = document.getElementById("instancesPanel");
+      const instancesBody = document.getElementById("instancesBody");
+      const instancesCompanyName = document.getElementById("instancesCompanyName");
+      const instancesMessage = document.getElementById("instancesMessage");
+      const closeInstancesBtn = document.getElementById("closeInstances");
 
       function readManagerAuth() {
         try {
@@ -314,20 +392,67 @@
 
       function renderCompanies(companies) {
         if (!companies.length) {
-          companiesBody.innerHTML = '<tr><td colspan="4">Nenhuma empresa cadastrada.</td></tr>';
+          companiesBody.innerHTML = '<tr><td colspan="5">Nenhuma empresa cadastrada.</td></tr>';
           return;
         }
         companiesBody.innerHTML = companies
           .map((company) => {
             const createdAt = company.createdAt ? new Date(company.createdAt).toLocaleString() : "-";
+            const id = escapeHtml(company.id || "");
+            const name = escapeHtml(company.name || "-");
             return `<tr>
-              <td>${escapeHtml(company.name || "-")}</td>
+              <td>${name}</td>
               <td><code>${escapeHtml(company.id || "-")}</code></td>
               <td>${company.active ? "Ativa" : "Inativa"}</td>
+              <td>${escapeHtml(createdAt)}</td>
+              <td><button class="row-button view-instances" data-company-id="${id}" data-company-name="${name}" type="button">Ver instâncias</button></td>
+            </tr>`;
+          })
+          .join("");
+
+        companiesBody.querySelectorAll(".view-instances").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const id = btn.getAttribute("data-company-id");
+            const name = btn.getAttribute("data-company-name");
+            if (id) loadInstances(id, name);
+          });
+        });
+      }
+
+      function renderInstances(instances) {
+        if (!instances.length) {
+          instancesBody.innerHTML = '<tr><td colspan="4">Nenhuma instância para esta empresa.</td></tr>';
+          return;
+        }
+        instancesBody.innerHTML = instances
+          .map((instance) => {
+            const createdAt = instance.createdAt ? new Date(instance.createdAt).toLocaleString() : "-";
+            const connected = instance.connected
+              ? '<span class="badge badge-ok">Conectada</span>'
+              : '<span class="badge badge-off">Desconectada</span>';
+            return `<tr>
+              <td>${escapeHtml(instance.name || "-")}</td>
+              <td><code>${escapeHtml(instance.jid || "-")}</code></td>
+              <td>${connected}</td>
               <td>${escapeHtml(createdAt)}</td>
             </tr>`;
           })
           .join("");
+      }
+
+      async function loadInstances(companyId, companyName) {
+        instancesPanel.classList.remove("hidden");
+        instancesCompanyName.textContent = companyName || companyId;
+        instancesBody.innerHTML = '<tr><td colspan="4">Carregando...</td></tr>';
+        setMessage(instancesMessage, "");
+        try {
+          const body = await request(`/company/instances/${encodeURIComponent(companyId)}`);
+          renderInstances(Array.isArray(body.data) ? body.data : []);
+        } catch (error) {
+          instancesBody.innerHTML = '<tr><td colspan="4">Não foi possível carregar.</td></tr>';
+          setMessage(instancesMessage, error.message, true);
+        }
+        instancesPanel.scrollIntoView({ behavior: "smooth", block: "start" });
       }
 
       function escapeHtml(value) {
@@ -341,13 +466,13 @@
 
       async function loadCompanies() {
         setMessage(authMessage, "Carregando empresas...");
-        companiesBody.innerHTML = '<tr><td colspan="4">Carregando...</td></tr>';
+        companiesBody.innerHTML = '<tr><td colspan="5">Carregando...</td></tr>';
         try {
           const body = await request("/company/all");
           renderCompanies(Array.isArray(body.data) ? body.data : []);
           setMessage(authMessage, "Autenticado como admin master.");
         } catch (error) {
-          companiesBody.innerHTML = '<tr><td colspan="4">Nao foi possivel carregar.</td></tr>';
+          companiesBody.innerHTML = '<tr><td colspan="5">Nao foi possivel carregar.</td></tr>';
           setMessage(authMessage, error.message, true);
         }
       }
@@ -399,6 +524,9 @@
       });
       document.getElementById("reload").addEventListener("click", loadCompanies);
       document.getElementById("createCompany").addEventListener("click", createCompany);
+      closeInstancesBtn.addEventListener("click", () => {
+        instancesPanel.classList.add("hidden");
+      });
       loadCompanies();
     </script>
   </body>
