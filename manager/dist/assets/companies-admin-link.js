@@ -3,8 +3,11 @@
 
   var targetHref = "/assets/companies-admin.html";
   var linkId = "evolution-companies-admin-link";
-  var isMaster = null;
-  var masterCheckPromise = null;
+
+  var lastApiKey = null;
+  var masterCache = null;
+  var masterCheckInFlight = null;
+  var observer = null;
 
   function isManagerPage() {
     return /^\/manager(\/|$)/.test(window.location.pathname);
@@ -18,32 +21,26 @@
     }
   }
 
-  function checkIsMaster() {
-    if (isMaster !== null) return Promise.resolve(isMaster);
-    if (masterCheckPromise) return masterCheckPromise;
+  function checkIsMaster(apiKey, apiUrl) {
+    if (masterCheckInFlight) return masterCheckInFlight;
 
-    var auth = getStoredAuth();
-    var apiKey = (auth && auth.apiKey) || "";
-    if (!apiKey) {
-      isMaster = false;
-      return Promise.resolve(false);
-    }
+    var baseUrl = (apiUrl || window.location.origin).replace(/\/$/, "");
 
-    var baseUrl = ((auth && auth.apiUrl) || window.location.origin).replace(/\/$/, "");
-
-    masterCheckPromise = fetch(baseUrl + "/company/all", {
+    masterCheckInFlight = fetch(baseUrl + "/company/all", {
       headers: { apikey: apiKey },
     })
       .then(function (response) {
-        isMaster = response.ok;
-        return isMaster;
+        return response.ok;
       })
       .catch(function () {
-        isMaster = false;
         return false;
+      })
+      .then(function (result) {
+        masterCheckInFlight = null;
+        return result;
       });
 
-    return masterCheckPromise;
+    return masterCheckInFlight;
   }
 
   function buildIcon() {
@@ -89,7 +86,7 @@
   }
 
   function injectLink() {
-    if (!isManagerPage() || document.getElementById(linkId)) return true;
+    if (document.getElementById(linkId)) return true;
 
     var instancesLink =
       document.querySelector('a[href="/manager/instances"]') ||
@@ -110,28 +107,70 @@
     return true;
   }
 
-  function startInjection() {
-    if (injectLink()) return;
+  function removeLink() {
+    var link = document.getElementById(linkId);
+    if (link && link.parentNode) link.parentNode.removeChild(link);
+  }
 
-    var observer = new MutationObserver(function () {
-      if (injectLink()) observer.disconnect();
+  function startObserver() {
+    if (observer) return;
+    observer = new MutationObserver(function () {
+      if (document.getElementById(linkId)) return;
+      if (masterCache === true) injectLink();
     });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
 
-    observer.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
-
-    window.setTimeout(function () {
+  function stopObserver() {
+    if (observer) {
       observer.disconnect();
-    }, 10000);
+      observer = null;
+    }
+  }
+
+  async function evaluate() {
+    if (!isManagerPage()) {
+      removeLink();
+      stopObserver();
+      return;
+    }
+
+    var auth = getStoredAuth();
+    var apiKey = (auth && auth.apiKey) || "";
+
+    if (apiKey !== lastApiKey) {
+      lastApiKey = apiKey;
+      masterCache = null;
+      removeLink();
+    }
+
+    if (!apiKey) {
+      stopObserver();
+      return;
+    }
+
+    if (masterCache === null) {
+      masterCache = await checkIsMaster(apiKey, auth.apiUrl);
+    }
+
+    if (!masterCache) {
+      stopObserver();
+      return;
+    }
+
+    if (!injectLink()) {
+      startObserver();
+    } else {
+      stopObserver();
+    }
   }
 
   function boot() {
-    if (!isManagerPage()) return;
-    checkIsMaster().then(function (master) {
-      if (!master) return;
-      startInjection();
+    evaluate();
+    window.setInterval(evaluate, 2000);
+
+    window.addEventListener("storage", function (event) {
+      if (event.key === "evolution-auth") evaluate();
     });
   }
 
