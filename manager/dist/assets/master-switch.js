@@ -25,6 +25,17 @@
     }
   }
 
+  function isSameOriginUrl(url) {
+    if (typeof url !== "string" || url === "") return false;
+    if (url.startsWith("/")) return true;
+    try {
+      var parsed = new URL(url, window.location.origin);
+      return parsed.origin === window.location.origin;
+    } catch (err) {
+      return false;
+    }
+  }
+
   var origFetch = window.fetch ? window.fetch.bind(window) : null;
   if (origFetch) {
     window.fetch = function (resource, init) {
@@ -37,11 +48,7 @@
           } else if (resource && typeof resource.url === "string") {
             url = resource.url;
           }
-          var sameOrigin =
-            url.startsWith("/") ||
-            url.startsWith(window.location.origin) ||
-            url === "";
-          if (sameOrigin) {
+          if (isSameOriginUrl(url)) {
             init = init || {};
             var headers = new Headers(init.headers || (resource && resource.headers) || {});
             if (!headers.has("X-Company-Id")) {
@@ -54,6 +61,32 @@
         /* fall through to fetch */
       }
       return origFetch(resource, init);
+    };
+  }
+
+  if (window.XMLHttpRequest && XMLHttpRequest.prototype) {
+    var origOpen = XMLHttpRequest.prototype.open;
+    var origSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function (method, url) {
+      try {
+        this.__evoUrl = typeof url === "string" ? url : "";
+      } catch (err) {
+        /* ignore */
+      }
+      return origOpen.apply(this, arguments);
+    };
+
+    XMLHttpRequest.prototype.send = function (body) {
+      try {
+        var selected = readSelected();
+        if (selected && selected.id && isSameOriginUrl(this.__evoUrl)) {
+          this.setRequestHeader("X-Company-Id", selected.id);
+        }
+      } catch (err) {
+        /* ignore */
+      }
+      return origSend.apply(this, arguments);
     };
   }
 
