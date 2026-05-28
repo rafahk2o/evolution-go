@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Empresas - Evolution GO</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #050505;
+        --panel: #151515;
+        --panel-2: #101010;
+        --border: #2a2a2a;
+        --text: #f5f5f5;
+        --muted: #a5b4c3;
+        --primary: #00e995;
+        --danger: #ff4d5e;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel-2);
+        padding: 18px 28px;
+      }
+
+      main {
+        margin: 0 auto;
+        max-width: 1120px;
+        padding: 28px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      h2 {
+        margin: 0 0 14px;
+        font-size: 16px;
+      }
+
+      p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+
+      a {
+        color: var(--primary);
+        text-decoration: none;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(280px, 360px) 1fr;
+        gap: 18px;
+      }
+
+      .panel {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 18px;
+      }
+
+      label {
+        display: block;
+        margin: 12px 0 6px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      input {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #080808;
+        color: var(--text);
+        font: inherit;
+        padding: 10px 12px;
+      }
+
+      button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--primary);
+        color: #001b12;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        min-height: 40px;
+        padding: 10px 14px;
+      }
+
+      button.secondary {
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .message {
+        margin-top: 14px;
+        min-height: 20px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .message.error {
+        color: var(--danger);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--border);
+        padding: 11px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      code {
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: #070707;
+        color: var(--muted);
+        display: inline-block;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        padding: 4px 6px;
+      }
+
+      .new-key {
+        margin-top: 14px;
+        border: 1px solid rgba(0, 233, 149, 0.35);
+        border-radius: 8px;
+        background: rgba(0, 233, 149, 0.08);
+        padding: 12px;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 840px) {
+        header,
+        main {
+          padding: 18px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Empresas</h1>
+        <p>Administração multitenant do Evolution GO</p>
+      </div>
+      <a href="/manager/instances">Voltar ao Manager</a>
+    </header>
+
+    <main>
+      <div class="grid">
+        <section class="panel">
+          <h2>Login master</h2>
+          <label for="apiUrl">URL da API</label>
+          <input id="apiUrl" placeholder="https://seu-dominio.com" />
+
+          <label for="masterKey">GLOBAL_API_KEY</label>
+          <input id="masterKey" type="password" placeholder="Cole a chave master" />
+
+          <div class="actions">
+            <button id="saveKey" type="button">Entrar como admin</button>
+            <button id="reload" class="secondary" type="button">Recarregar</button>
+          </div>
+
+          <p id="authMessage" class="message"></p>
+        </section>
+
+        <section class="panel">
+          <h2>Nova empresa</h2>
+          <label for="companyName">Nome</label>
+          <input id="companyName" placeholder="Empresa A" />
+
+          <label for="companyApiKey">API key da empresa opcional</label>
+          <input id="companyApiKey" placeholder="Deixe vazio para gerar automaticamente" />
+
+          <div class="actions">
+            <button id="createCompany" type="button">Criar empresa</button>
+          </div>
+
+          <div id="newKeyBox" class="new-key hidden">
+            <strong>API key gerada</strong>
+            <p>Guarde esta chave. Ela aparece apenas nesta resposta.</p>
+            <p><code id="newKey"></code></p>
+          </div>
+
+          <p id="createMessage" class="message"></p>
+        </section>
+      </div>
+
+      <section class="panel" style="margin-top: 18px">
+        <h2>Empresas cadastradas</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>ID</th>
+              <th>Status</th>
+              <th>Criada em</th>
+            </tr>
+          </thead>
+          <tbody id="companiesBody">
+            <tr>
+              <td colspan="4">Carregando...</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const apiUrlInput = document.getElementById("apiUrl");
+      const masterKeyInput = document.getElementById("masterKey");
+      const authMessage = document.getElementById("authMessage");
+      const createMessage = document.getElementById("createMessage");
+      const companiesBody = document.getElementById("companiesBody");
+      const newKeyBox = document.getElementById("newKeyBox");
+      const newKey = document.getElementById("newKey");
+
+      function readManagerAuth() {
+        try {
+          return JSON.parse(localStorage.getItem("evolution-auth") || "{}");
+        } catch {
+          return {};
+        }
+      }
+
+      function getBaseUrl() {
+        return (apiUrlInput.value || window.location.origin).replace(/\/$/, "");
+      }
+
+      function getMasterKey() {
+        return masterKeyInput.value.trim();
+      }
+
+      function setMessage(element, text, isError) {
+        element.textContent = text || "";
+        element.classList.toggle("error", Boolean(isError));
+      }
+
+      async function request(path, options = {}) {
+        const key = getMasterKey();
+        if (!key) throw new Error("Informe a GLOBAL_API_KEY.");
+
+        const response = await fetch(`${getBaseUrl()}${path}`, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            apikey: key,
+            ...(options.headers || {}),
+          },
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.error || `Erro HTTP ${response.status}`);
+        }
+        return body;
+      }
+
+      function renderCompanies(companies) {
+        if (!companies.length) {
+          companiesBody.innerHTML = '<tr><td colspan="4">Nenhuma empresa cadastrada.</td></tr>';
+          return;
+        }
+        companiesBody.innerHTML = companies
+          .map((company) => {
+            const createdAt = company.createdAt ? new Date(company.createdAt).toLocaleString() : "-";
+            return `<tr>
+              <td>${escapeHtml(company.name || "-")}</td>
+              <td><code>${escapeHtml(company.id || "-")}</code></td>
+              <td>${company.active ? "Ativa" : "Inativa"}</td>
+              <td>${escapeHtml(createdAt)}</td>
+            </tr>`;
+          })
+          .join("");
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      async function loadCompanies() {
+        setMessage(authMessage, "Carregando empresas...");
+        companiesBody.innerHTML = '<tr><td colspan="4">Carregando...</td></tr>';
+        try {
+          const body = await request("/company/all");
+          renderCompanies(Array.isArray(body.data) ? body.data : []);
+          setMessage(authMessage, "Autenticado como admin master.");
+        } catch (error) {
+          companiesBody.innerHTML = '<tr><td colspan="4">Nao foi possivel carregar.</td></tr>';
+          setMessage(authMessage, error.message, true);
+        }
+      }
+
+      async function createCompany() {
+        const name = document.getElementById("companyName").value.trim();
+        const apiKey = document.getElementById("companyApiKey").value.trim();
+        if (!name) {
+          setMessage(createMessage, "Informe o nome da empresa.", true);
+          return;
+        }
+
+        setMessage(createMessage, "Criando empresa...");
+        newKeyBox.classList.add("hidden");
+        try {
+          const body = await request("/company/create", {
+            method: "POST",
+            body: JSON.stringify({ name, apiKey }),
+          });
+          const generatedKey = body.data && body.data.apiKey;
+          if (generatedKey) {
+            newKey.textContent = generatedKey;
+            newKeyBox.classList.remove("hidden");
+          }
+          document.getElementById("companyName").value = "";
+          document.getElementById("companyApiKey").value = "";
+          setMessage(createMessage, "Empresa criada.");
+          await loadCompanies();
+        } catch (error) {
+          setMessage(createMessage, error.message, true);
+        }
+      }
+
+      const auth = readManagerAuth();
+      apiUrlInput.value = auth.apiUrl || window.location.origin;
+      masterKeyInput.value = auth.apiKey || "";
+
+      document.getElementById("saveKey").addEventListener("click", () => {
+        localStorage.setItem(
+          "evolution-auth",
+          JSON.stringify({
+            ...readManagerAuth(),
+            apiUrl: getBaseUrl(),
+            apiKey: getMasterKey(),
+            isAuthenticated: Boolean(getMasterKey()),
+          }),
+        );
+        loadCompanies();
+      });
+      document.getElementById("reload").addEventListener("click", loadCompanies);
+      document.getElementById("createCompany").addEventListener("click", createCompany);
+      loadCompanies();
+    </script>
+  </body>
+</html>

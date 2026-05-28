@@ -68,6 +68,10 @@ func (r *Routes) AssignRoutes(eng *gin.Engine) {
 	// Rotas para o gerenciador React (sem autenticação)
 	eng.Static("/assets", "./manager/dist/assets")
 
+	eng.GET("/manager/companies-admin", func(c *gin.Context) {
+		c.File("manager/dist/companies-admin.html")
+	})
+
 	// Ajuste nas rotas do manager para suportar client-side routing do React
 	eng.GET("/manager/*any", func(c *gin.Context) {
 		c.File("manager/dist/index.html")
