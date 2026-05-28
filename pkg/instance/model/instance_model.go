@@ -9,6 +9,7 @@ import (
 
 type Instance struct {
 	Id               string    `json:"id" gorm:"type:uuid;primaryKey"`
+	CompanyID        string    `json:"companyId" gorm:"column:company_id;type:uuid;index"`
 	Name             string    `json:"name"`
 	Token            string    `json:"token" gorm:"unique"`
 	Webhook          string    `json:"webhook"`

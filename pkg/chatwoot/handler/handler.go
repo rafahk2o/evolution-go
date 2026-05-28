@@ -54,7 +54,7 @@ func NewHandler(
 }
 
 func (h *Handler) Webhook(ctx *gin.Context) {
-	instance, err := h.findInstance(ctx.Param("instance"))
+	instance, err := h.findInstance(ctx.Param("instance"), ctx.Param("token"))
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "instance not found"})
 		return
@@ -223,11 +223,16 @@ func convertibleString(value interface{}) string {
 	}
 }
 
-func (h *Handler) findInstance(identifier string) (*instance_model.Instance, error) {
+func (h *Handler) findInstance(identifier string, token string) (*instance_model.Instance, error) {
 	if identifier == "" {
 		return nil, http.ErrMissingFile
 	}
 
+	if token != "" {
+		if instance, err := h.instanceRepository.GetInstanceByNameAndToken(identifier, token); err == nil {
+			return instance, nil
+		}
+	}
 	if instance, err := h.instanceRepository.GetInstanceByName(identifier); err == nil {
 		return instance, nil
 	}

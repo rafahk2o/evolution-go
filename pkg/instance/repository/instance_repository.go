@@ -18,9 +18,12 @@ import (
 type InstanceRepository interface {
 	Create(instance instance_model.Instance) (*instance_model.Instance, error)
 	GetInstanceByID(instanceId string) (*instance_model.Instance, error)
+	GetInstanceByIDAndCompany(instanceId string, companyID string) (*instance_model.Instance, error)
 	GetConnectedInstanceByID(instanceId string) (*instance_model.Instance, error)
 	GetInstanceByToken(token string) (*instance_model.Instance, error)
 	GetInstanceByName(name string) (*instance_model.Instance, error)
+	GetInstanceByNameAndToken(name string, token string) (*instance_model.Instance, error)
+	GetInstanceByNameAndCompany(name string, companyID string) (*instance_model.Instance, error)
 	Update(*instance_model.Instance) error
 	UpdateConnected(userId string, status bool, disconnectReason string) error
 	UpdateQrcode(userId string, qr string) error
@@ -29,6 +32,7 @@ type InstanceRepository interface {
 	GetAllConnectedInstances() ([]*instance_model.Instance, error)
 	GetAllConnectedInstancesByClientName(clientName string) ([]*instance_model.Instance, error)
 	GetAll(clientName string) ([]*instance_model.Instance, error)
+	GetAllByCompany(clientName string, companyID string) ([]*instance_model.Instance, error)
 	Delete(instanceId string) error
 	GetAdvancedSettings(instanceId string) (*instance_model.AdvancedSettings, error)
 	UpdateAdvancedSettings(instanceId string, settings *instance_model.AdvancedSettings) error
@@ -69,6 +73,32 @@ func (i *instanceRepository) GetInstanceByName(name string) (*instance_model.Ins
 	return &instance, nil
 }
 
+func (i *instanceRepository) GetInstanceByNameAndToken(name string, token string) (*instance_model.Instance, error) {
+	var instance instance_model.Instance
+	err := i.db.Where(
+		"name = ? AND (token = ? OR chatwoot_webhook_token = ? OR id = ?)",
+		name,
+		token,
+		token,
+		token,
+	).First(&instance).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
+}
+
+func (i *instanceRepository) GetInstanceByNameAndCompany(name string, companyID string) (*instance_model.Instance, error) {
+	var instance instance_model.Instance
+	err := i.db.Where("name = ? AND company_id = ?", name, companyID).First(&instance).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
+}
+
 func (i *instanceRepository) GetInstanceByID(instanceId string) (*instance_model.Instance, error) {
 	// Valida o formato do UUID
 	if _, err := uuid.Parse(instanceId); err != nil {
@@ -77,6 +107,21 @@ func (i *instanceRepository) GetInstanceByID(instanceId string) (*instance_model
 
 	var instance instance_model.Instance
 	err := i.db.Where("id = ?", instanceId).First(&instance).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
+}
+
+func (i *instanceRepository) GetInstanceByIDAndCompany(instanceId string, companyID string) (*instance_model.Instance, error) {
+	// Valida o formato do UUID
+	if _, err := uuid.Parse(instanceId); err != nil {
+		return nil, fmt.Errorf("invalid UUID format: %v", err)
+	}
+
+	var instance instance_model.Instance
+	err := i.db.Where("id = ? AND company_id = ?", instanceId, companyID).First(&instance).Error
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +186,16 @@ func (i *instanceRepository) GetAllConnectedInstancesByClientName(clientName str
 func (i *instanceRepository) GetAll(clientName string) ([]*instance_model.Instance, error) {
 	var instances []*instance_model.Instance
 	err := i.db.Where("client_name = ?", clientName).Find(&instances).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return instances, nil
+}
+
+func (i *instanceRepository) GetAllByCompany(clientName string, companyID string) ([]*instance_model.Instance, error) {
+	var instances []*instance_model.Instance
+	err := i.db.Where("client_name = ? AND company_id = ?", clientName, companyID).Find(&instances).Error
 	if err != nil {
 		return nil, err
 	}

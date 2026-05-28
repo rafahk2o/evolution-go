@@ -33,15 +33,15 @@ type InstanceService interface {
 	Status(instance *instance_model.Instance) (*StatusStruct, error)
 	GetQr(instance *instance_model.Instance) (*QrcodeStruct, error)
 	Pair(data *PairStruct, instance *instance_model.Instance) (*PairReturnStruct, error)
-	GetAll() ([]*instance_model.Instance, error)
-	Info(instanceId string) (*instance_model.Instance, error)
-	Delete(id string) error
-	SetProxy(id string, proxyConfig *ProxyConfig) error
-	SetProxyFromStruct(id string, data *SetProxyStruct) error
-	RemoveProxy(id string) error
-	ForceReconnect(instanceId string, number string) error
+	GetAll(companyID string) ([]*instance_model.Instance, error)
+	Info(instanceId string, companyID string) (*instance_model.Instance, error)
+	Delete(id string, companyID string) error
+	SetProxy(id string, companyID string, proxyConfig *ProxyConfig) error
+	SetProxyFromStruct(id string, companyID string, data *SetProxyStruct) error
+	RemoveProxy(id string, companyID string) error
+	ForceReconnect(instanceId string, companyID string, number string) error
 	GetInstanceByToken(token string) (*instance_model.Instance, error)
-	GetLogs(instanceId string, startDate, endDate time.Time, level string, limit int) ([]logger_wrapper.LogEntry, error)
+	GetLogs(instanceId string, companyID string, startDate, endDate time.Time, level string, limit int) ([]logger_wrapper.LogEntry, error)
 	GetAdvancedSettings(instanceId string) (*instance_model.AdvancedSettings, error)
 	UpdateAdvancedSettings(instanceId string, settings *instance_model.AdvancedSettings) error
 	GetChatwootSettings(instanceId string) (*instance_model.ChatwootSettings, error)
@@ -67,6 +67,7 @@ type ProxyConfig struct {
 
 type CreateStruct struct {
 	InstanceId       string                           `json:"instanceId"`
+	CompanyID        string                           `json:"companyId,omitempty"`
 	Name             string                           `json:"name"`
 	Token            string                           `json:"token"`
 	Proxy            *ProxyConfig                     `json:"proxy"`
@@ -158,6 +159,10 @@ func (i *instances) ensureClientConnected(instanceId string) (*whatsmeow.Client,
 }
 
 func (i instances) Create(data *CreateStruct) (*instance_model.Instance, error) {
+	if data.CompanyID == "" {
+		return nil, fmt.Errorf("companyId is required")
+	}
+
 	if data.Proxy != nil {
 		data.Proxy.Protocol = utils.NormalizeProxyProtocol(data.Proxy.Protocol, data.Proxy.Port)
 	}
@@ -167,7 +172,7 @@ func (i instances) Create(data *CreateStruct) (*instance_model.Instance, error) 
 		return nil, err
 	}
 
-	findInstance, _ := i.instanceRepository.GetInstanceByName(data.Name)
+	findInstance, _ := i.instanceRepository.GetInstanceByNameAndCompany(data.Name, data.CompanyID)
 
 	if findInstance != nil {
 		return nil, fmt.Errorf("instance already exists")
@@ -175,6 +180,7 @@ func (i instances) Create(data *CreateStruct) (*instance_model.Instance, error) 
 
 	instance := instance_model.Instance{
 		Id:         data.InstanceId,
+		CompanyID:  data.CompanyID,
 		Name:       data.Name,
 		Token:      data.Token,
 		OsName:     i.config.OsName,
@@ -486,8 +492,8 @@ func (i instances) Pair(data *PairStruct, instance *instance_model.Instance) (*P
 	return &PairReturnStruct{PairingCode: code}, nil
 }
 
-func (i instances) GetAll() ([]*instance_model.Instance, error) {
-	instances, err := i.instanceRepository.GetAll(i.config.ClientName)
+func (i instances) GetAll(companyID string) ([]*instance_model.Instance, error) {
+	instances, err := i.instanceRepository.GetAllByCompany(i.config.ClientName, companyID)
 	if err != nil {
 		return nil, err
 	}
@@ -505,8 +511,8 @@ func (i instances) GetAll() ([]*instance_model.Instance, error) {
 	return instances, nil
 }
 
-func (i instances) Info(instanceId string) (*instance_model.Instance, error) {
-	instance, err := i.instanceRepository.GetInstanceByID(instanceId)
+func (i instances) Info(instanceId string, companyID string) (*instance_model.Instance, error) {
+	instance, err := i.instanceRepository.GetInstanceByIDAndCompany(instanceId, companyID)
 	if err != nil {
 		return nil, err
 	}
@@ -523,8 +529,8 @@ func (i instances) Info(instanceId string) (*instance_model.Instance, error) {
 	return instance, nil
 }
 
-func (i instances) Delete(id string) error {
-	instance, err := i.instanceRepository.GetInstanceByID(id)
+func (i instances) Delete(id string, companyID string) error {
+	instance, err := i.instanceRepository.GetInstanceByIDAndCompany(id, companyID)
 	if err != nil {
 		return err
 	}
@@ -557,8 +563,8 @@ func (i instances) Delete(id string) error {
 	return nil
 }
 
-func (i instances) SetProxy(id string, proxyConfig *ProxyConfig) error {
-	instance, err := i.instanceRepository.GetInstanceByID(id)
+func (i instances) SetProxy(id string, companyID string, proxyConfig *ProxyConfig) error {
+	instance, err := i.instanceRepository.GetInstanceByIDAndCompany(id, companyID)
 	if err != nil {
 		return err
 	}
@@ -602,7 +608,7 @@ func (i instances) SetProxy(id string, proxyConfig *ProxyConfig) error {
 	return nil
 }
 
-func (i instances) SetProxyFromStruct(id string, data *SetProxyStruct) error {
+func (i instances) SetProxyFromStruct(id string, companyID string, data *SetProxyStruct) error {
 	if data == nil {
 		return fmt.Errorf("proxy data cannot be nil")
 	}
@@ -615,11 +621,11 @@ func (i instances) SetProxyFromStruct(id string, data *SetProxyStruct) error {
 		Password: data.Password,
 	}
 
-	return i.SetProxy(id, proxyConfig)
+	return i.SetProxy(id, companyID, proxyConfig)
 }
 
-func (i instances) RemoveProxy(id string) error {
-	instance, err := i.instanceRepository.GetInstanceByID(id)
+func (i instances) RemoveProxy(id string, companyID string) error {
+	instance, err := i.instanceRepository.GetInstanceByIDAndCompany(id, companyID)
 	if err != nil {
 		return err
 	}
@@ -638,8 +644,12 @@ func (i instances) RemoveProxy(id string) error {
 	return nil
 }
 
-func (i instances) ForceReconnect(instanceId string, number string) error {
-	if i.clientPointer[instanceId].IsConnected() && i.clientPointer[instanceId].IsLoggedIn() {
+func (i instances) ForceReconnect(instanceId string, companyID string, number string) error {
+	if _, err := i.instanceRepository.GetInstanceByIDAndCompany(instanceId, companyID); err != nil {
+		return err
+	}
+
+	if client := i.clientPointer[instanceId]; client != nil && client.IsConnected() && client.IsLoggedIn() {
 		return fmt.Errorf("client already connected")
 	}
 
@@ -713,9 +723,13 @@ func (i instances) GetInstanceByToken(token string) (*instance_model.Instance, e
 	return i.instanceRepository.GetInstanceByToken(token)
 }
 
-func (i instances) GetLogs(instanceId string, startDate, endDate time.Time, level string, limit int) ([]logger_wrapper.LogEntry, error) {
+func (i instances) GetLogs(instanceId string, companyID string, startDate, endDate time.Time, level string, limit int) ([]logger_wrapper.LogEntry, error) {
 	// Inicializa o slice vazio para garantir que nunca retorne null
 	logs := make([]logger_wrapper.LogEntry, 0)
+
+	if _, err := i.instanceRepository.GetInstanceByIDAndCompany(instanceId, companyID); err != nil {
+		return logs, err
+	}
 
 	// Define valores padrão
 	if limit <= 0 {

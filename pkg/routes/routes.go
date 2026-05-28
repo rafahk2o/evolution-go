@@ -10,6 +10,7 @@ import (
 	_ "github.com/EvolutionAPI/evolution-go/docs"
 	call_handler "github.com/EvolutionAPI/evolution-go/pkg/call/handler"
 	chat_handler "github.com/EvolutionAPI/evolution-go/pkg/chat/handler"
+	company_handler "github.com/EvolutionAPI/evolution-go/pkg/company/handler"
 	community_handler "github.com/EvolutionAPI/evolution-go/pkg/community/handler"
 	group_handler "github.com/EvolutionAPI/evolution-go/pkg/group/handler"
 	instance_handler "github.com/EvolutionAPI/evolution-go/pkg/instance/handler"
@@ -26,6 +27,7 @@ import (
 type Routes struct {
 	authMiddleware          auth_middleware.Middleware
 	jidValidationMiddleware *auth_middleware.JIDValidationMiddleware
+	companyHandler          company_handler.CompanyHandler
 	instanceHandler         instance_handler.InstanceHandler
 	userHandler             user_handler.UserHandler
 	sendHandler             send_handler.SendHandler
@@ -76,6 +78,15 @@ func (r *Routes) AssignRoutes(eng *gin.Engine) {
 	})
 
 	eng.GET("/server/ok", r.serverHandler.ServerOk)
+
+	companyRoutes := eng.Group("/company")
+	{
+		companyRoutes.Use(r.authMiddleware.AuthMaster)
+		{
+			companyRoutes.POST("/create", r.companyHandler.Create)
+			companyRoutes.GET("/all", r.companyHandler.All)
+		}
+	}
 
 	routes := eng.Group("/instance")
 	{
@@ -249,6 +260,7 @@ func (r *Routes) AssignRoutes(eng *gin.Engine) {
 
 func NewRouter(
 	authMiddleware auth_middleware.Middleware,
+	companyHandler company_handler.CompanyHandler,
 	instanceHandler instance_handler.InstanceHandler,
 	userHandler user_handler.UserHandler,
 	sendHandler send_handler.SendHandler,
@@ -265,6 +277,7 @@ func NewRouter(
 	return &Routes{
 		authMiddleware:          authMiddleware,
 		jidValidationMiddleware: auth_middleware.NewJIDValidationMiddleware(),
+		companyHandler:          companyHandler,
 		instanceHandler:         instanceHandler,
 		userHandler:             userHandler,
 		sendHandler:             sendHandler,

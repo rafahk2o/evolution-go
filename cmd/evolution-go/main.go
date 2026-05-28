@@ -27,6 +27,10 @@ import (
 	chat_service "github.com/EvolutionAPI/evolution-go/pkg/chat/service"
 	chatwoot "github.com/EvolutionAPI/evolution-go/pkg/chatwoot"
 	chatwoot_handler "github.com/EvolutionAPI/evolution-go/pkg/chatwoot/handler"
+	company_handler "github.com/EvolutionAPI/evolution-go/pkg/company/handler"
+	company_model "github.com/EvolutionAPI/evolution-go/pkg/company/model"
+	company_repository "github.com/EvolutionAPI/evolution-go/pkg/company/repository"
+	company_service "github.com/EvolutionAPI/evolution-go/pkg/company/service"
 	community_handler "github.com/EvolutionAPI/evolution-go/pkg/community/handler"
 	community_service "github.com/EvolutionAPI/evolution-go/pkg/community/service"
 	config "github.com/EvolutionAPI/evolution-go/pkg/config"
@@ -161,6 +165,8 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 	}
 
 	instanceRepository := instance_repository.NewInstanceRepository(db)
+	companyRepository := company_repository.NewCompanyRepository(db)
+	companyService := company_service.NewCompanyService(companyRepository)
 	messageRepository := message_repository.NewMessageRepository(db)
 	labelRepository := label_repository.NewLabelRepository(db)
 
@@ -228,7 +234,8 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 	r.POST("/webhooks/chatwoot/:instance/:token", chatwootHandler.Webhook)
 
 	routes.NewRouter(
-		auth_middleware.NewMiddleware(config, instanceService),
+		auth_middleware.NewMiddleware(config, companyService, instanceService),
+		company_handler.NewCompanyHandler(companyService),
 		instance_handler.NewInstanceHandler(instanceService, config),
 		user_handler.NewUserHandler(userService),
 		send_handler.NewSendHandler(sendMessageService),
@@ -251,9 +258,15 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 		token := c.Query("token")
 		instanceId := c.Query("instanceId")
 
-		if token != config.GlobalApiKey {
+		company, err := companyService.AuthenticateAPIKey(token)
+		if err != nil {
 			logger.LogError("Token inválido: %s", token)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token inválido"})
+			return
+		}
+
+		if _, err := instanceRepository.GetInstanceByIDAndCompany(instanceId, company.Id); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "instance does not belong to authenticated company"})
 			return
 		}
 
@@ -263,10 +276,19 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 	return r
 }
 
-func migrate(db *gorm.DB) {
-	err := db.AutoMigrate(&instance_model.Instance{}, &message_model.Message{}, &label_model.Label{})
+func migrate(db *gorm.DB, config *config.Config) {
+	err := db.AutoMigrate(&company_model.Company{}, &instance_model.Instance{}, &message_model.Message{}, &label_model.Label{})
 
 	if err != nil {
+		log.Fatal(err)
+	}
+
+	companyRepository := company_repository.NewCompanyRepository(db)
+	defaultCompany, err := companyRepository.EnsureDefaultCompany(config.GlobalApiKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := companyRepository.BackfillInstances(defaultCompany.Id); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -369,7 +391,7 @@ func main() {
 		defer sqliteDB.Close()
 	}
 
-	migrate(db)
+	migrate(db, cfg)
 
 	// Initialize core DB + license runtime
 	core.SetDB(db)

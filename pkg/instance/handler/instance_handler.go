@@ -69,6 +69,13 @@ func (i *instanceHandler) Create(ctx *gin.Context) {
 		return
 	}
 
+	companyID, ok := companyIDFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "company not found"})
+		return
+	}
+	data.CompanyID = companyID
+
 	if data.Proxy != nil {
 		if data.Proxy.Port == "" {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "proxy port is required"})
@@ -343,7 +350,13 @@ func (i *instanceHandler) Pair(ctx *gin.Context) {
 // @Failure 500 {object} gin.H "Internal server error"
 // @Router /instance/all [get]
 func (i *instanceHandler) All(ctx *gin.Context) {
-	instances, err := i.instanceService.GetAll()
+	companyID, ok := companyIDFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "company not found"})
+		return
+	}
+
+	instances, err := i.instanceService.GetAll(companyID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -371,7 +384,13 @@ func (i *instanceHandler) Info(ctx *gin.Context) {
 		return
 	}
 
-	instance, err := i.instanceService.Info(instanceId)
+	companyID, ok := companyIDFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "company not found"})
+		return
+	}
+
+	instance, err := i.instanceService.Info(instanceId, companyID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -399,7 +418,13 @@ func (i *instanceHandler) Delete(ctx *gin.Context) {
 		return
 	}
 
-	err := i.instanceService.Delete(instanceId)
+	companyID, ok := companyIDFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "company not found"})
+		return
+	}
+
+	err := i.instanceService.Delete(instanceId, companyID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -446,7 +471,13 @@ func (i *instanceHandler) SetProxy(ctx *gin.Context) {
 		return
 	}
 
-	err = i.instanceService.SetProxyFromStruct(instanceId, data)
+	companyID, ok := companyIDFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "company not found"})
+		return
+	}
+
+	err = i.instanceService.SetProxyFromStruct(instanceId, companyID, data)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -481,7 +512,13 @@ func (i *instanceHandler) DeleteProxy(ctx *gin.Context) {
 		return
 	}
 
-	err := i.instanceService.RemoveProxy(instanceId)
+	companyID, ok := companyIDFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "company not found"})
+		return
+	}
+
+	err := i.instanceService.RemoveProxy(instanceId, companyID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -525,7 +562,13 @@ func (i *instanceHandler) ForceReconnect(ctx *gin.Context) {
 
 	number = data.Number
 
-	err = i.instanceService.ForceReconnect(instanceId, number)
+	companyID, ok := companyIDFromContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "company not found"})
+		return
+	}
+
+	err = i.instanceService.ForceReconnect(instanceId, companyID, number)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -568,7 +611,13 @@ func (h *instanceHandler) GetLogs(c *gin.Context) {
 		query.Limit = 100 // Default: 100 registros
 	}
 
-	logs, err := h.instanceService.GetLogs(instanceId, startDate, endDate, query.Level, query.Limit)
+	companyID, ok := companyIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "company not found"})
+		return
+	}
+
+	logs, err := h.instanceService.GetLogs(instanceId, companyID, startDate, endDate, query.Level, query.Limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -593,6 +642,11 @@ func (h *instanceHandler) GetAdvancedSettings(c *gin.Context) {
 
 	if instanceId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "instanceId is required"})
+		return
+	}
+
+	if !authenticatedInstanceMatches(c, instanceId) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "instance does not belong to authenticated token"})
 		return
 	}
 
@@ -623,6 +677,11 @@ func (h *instanceHandler) UpdateAdvancedSettings(c *gin.Context) {
 
 	if instanceId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "instanceId is required"})
+		return
+	}
+
+	if !authenticatedInstanceMatches(c, instanceId) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "instance does not belong to authenticated token"})
 		return
 	}
 
@@ -662,13 +721,19 @@ func (h *instanceHandler) GetChatwootSettings(c *gin.Context) {
 		return
 	}
 
+	if !authenticatedInstanceMatches(c, instanceId) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "instance does not belong to authenticated token"})
+		return
+	}
+
 	settings, err := h.instanceService.GetChatwootSettings(instanceId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	instance, err := h.instanceService.Info(instanceId)
+	authInstance := c.MustGet("instance").(*instance_model.Instance)
+	instance, err := h.instanceService.Info(instanceId, authInstance.CompanyID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -700,6 +765,11 @@ func (h *instanceHandler) UpdateChatwootSettings(c *gin.Context) {
 		return
 	}
 
+	if !authenticatedInstanceMatches(c, instanceId) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "instance does not belong to authenticated token"})
+		return
+	}
+
 	var settings instance_model.ChatwootSettings
 	if err := c.ShouldBindJSON(&settings); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -723,7 +793,8 @@ func (h *instanceHandler) UpdateChatwootSettings(c *gin.Context) {
 		return
 	}
 
-	instance, err := h.instanceService.Info(instanceId)
+	authInstance := c.MustGet("instance").(*instance_model.Instance)
+	instance, err := h.instanceService.Info(instanceId, authInstance.CompanyID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -760,4 +831,25 @@ func (h *instanceHandler) buildChatwootWebhookURL(c *gin.Context, instance *inst
 
 func NewInstanceHandler(instanceService instance_service.InstanceService, config *config.Config) InstanceHandler {
 	return &instanceHandler{instanceService: instanceService, config: config}
+}
+
+func companyIDFromContext(ctx *gin.Context) (string, bool) {
+	value, exists := ctx.Get("companyId")
+	if !exists {
+		return "", false
+	}
+	companyID, ok := value.(string)
+	return companyID, ok && companyID != ""
+}
+
+func authenticatedInstanceMatches(ctx *gin.Context, instanceID string) bool {
+	value, exists := ctx.Get("instance")
+	if !exists {
+		return false
+	}
+	instance, ok := value.(*instance_model.Instance)
+	if !ok || instance == nil {
+		return false
+	}
+	return instance.Id == instanceID
 }

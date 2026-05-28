@@ -1210,6 +1210,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							"", // CompanyID não disponível no MyClient, será vazio
 							mycli.Instance.Id,
 						)
+						pollVote.CompanyID = mycli.Instance.CompanyID
 
 						// Salvar no banco com timeout de segurança
 						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
