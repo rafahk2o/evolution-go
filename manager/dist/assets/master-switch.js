@@ -152,8 +152,46 @@
     }
   }
 
+  function readManagerAuth() {
+    try {
+      return JSON.parse(localStorage.getItem("evolution-auth") || "{}");
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function verifyMaster() {
+    var auth = readManagerAuth();
+    var apiKey = (auth && auth.apiKey) || "";
+    if (!apiKey) return Promise.resolve(false);
+    var baseUrl = ((auth && auth.apiUrl) || window.location.origin).replace(/\/$/, "");
+    return fetch(baseUrl + "/company/all", { headers: { apikey: apiKey } })
+      .then(function (response) {
+        return response.ok;
+      })
+      .catch(function () {
+        return false;
+      });
+  }
+
+  function syncBannerWithAuth() {
+    var selected = readSelected();
+    if (!selected) {
+      ensureBanner(null);
+      return;
+    }
+    verifyMaster().then(function (isMaster) {
+      if (!isMaster) {
+        clearSelected();
+        ensureBanner(null);
+      } else {
+        ensureBanner(selected);
+      }
+    });
+  }
+
   function boot() {
-    ensureBanner(readSelected());
+    syncBannerWithAuth();
   }
 
   if (document.readyState === "loading") {
@@ -163,8 +201,8 @@
   }
 
   window.addEventListener("storage", function (event) {
-    if (event.key === STORAGE_KEY) {
-      ensureBanner(readSelected());
+    if (event.key === STORAGE_KEY || event.key === "evolution-auth") {
+      syncBannerWithAuth();
     }
   });
 })();
