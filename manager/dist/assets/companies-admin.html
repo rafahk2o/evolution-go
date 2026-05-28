@@ -199,38 +199,6 @@
         color: var(--primary);
       }
 
-      .badge {
-        border-radius: 999px;
-        display: inline-block;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        padding: 3px 8px;
-        text-transform: uppercase;
-      }
-
-      .badge-ok {
-        background: rgba(0, 233, 149, 0.15);
-        color: var(--primary);
-      }
-
-      .badge-off {
-        background: rgba(255, 77, 94, 0.15);
-        color: var(--danger);
-      }
-
-      .instances-header {
-        align-items: center;
-        display: flex;
-        gap: 12px;
-        justify-content: space-between;
-        margin-bottom: 12px;
-      }
-
-      .instances-header h2 {
-        margin: 0;
-      }
-
       @media (max-width: 840px) {
         header,
         main {
@@ -312,31 +280,11 @@
         </table>
       </section>
 
-      <section id="instancesPanel" class="panel hidden" style="margin-top: 18px">
-        <div class="instances-header">
-          <h2>Instâncias de <span id="instancesCompanyName">-</span></h2>
-          <button id="closeInstances" class="row-button" type="button">Fechar</button>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>JID</th>
-              <th>Conexão</th>
-              <th>Criada em</th>
-            </tr>
-          </thead>
-          <tbody id="instancesBody">
-            <tr>
-              <td colspan="4">Carregando...</td>
-            </tr>
-          </tbody>
-        </table>
-        <p id="instancesMessage" class="message"></p>
-      </section>
     </main>
 
     <script>
+      const SELECTED_COMPANY_KEY = "evolution-selected-company";
+
       const apiUrlInput = document.getElementById("apiUrl");
       const masterKeyInput = document.getElementById("masterKey");
       const authMessage = document.getElementById("authMessage");
@@ -344,11 +292,6 @@
       const companiesBody = document.getElementById("companiesBody");
       const newKeyBox = document.getElementById("newKeyBox");
       const newKey = document.getElementById("newKey");
-      const instancesPanel = document.getElementById("instancesPanel");
-      const instancesBody = document.getElementById("instancesBody");
-      const instancesCompanyName = document.getElementById("instancesCompanyName");
-      const instancesMessage = document.getElementById("instancesMessage");
-      const closeInstancesBtn = document.getElementById("closeInstances");
 
       function readManagerAuth() {
         try {
@@ -414,45 +357,21 @@
           btn.addEventListener("click", () => {
             const id = btn.getAttribute("data-company-id");
             const name = btn.getAttribute("data-company-name");
-            if (id) loadInstances(id, name);
+            if (id) enterCompany(id, name);
           });
         });
       }
 
-      function renderInstances(instances) {
-        if (!instances.length) {
-          instancesBody.innerHTML = '<tr><td colspan="4">Nenhuma instância para esta empresa.</td></tr>';
-          return;
-        }
-        instancesBody.innerHTML = instances
-          .map((instance) => {
-            const createdAt = instance.createdAt ? new Date(instance.createdAt).toLocaleString() : "-";
-            const connected = instance.connected
-              ? '<span class="badge badge-ok">Conectada</span>'
-              : '<span class="badge badge-off">Desconectada</span>';
-            return `<tr>
-              <td>${escapeHtml(instance.name || "-")}</td>
-              <td><code>${escapeHtml(instance.jid || "-")}</code></td>
-              <td>${connected}</td>
-              <td>${escapeHtml(createdAt)}</td>
-            </tr>`;
-          })
-          .join("");
-      }
-
-      async function loadInstances(companyId, companyName) {
-        instancesPanel.classList.remove("hidden");
-        instancesCompanyName.textContent = companyName || companyId;
-        instancesBody.innerHTML = '<tr><td colspan="4">Carregando...</td></tr>';
-        setMessage(instancesMessage, "");
+      function enterCompany(companyId, companyName) {
         try {
-          const body = await request(`/company/instances/${encodeURIComponent(companyId)}`);
-          renderInstances(Array.isArray(body.data) ? body.data : []);
-        } catch (error) {
-          instancesBody.innerHTML = '<tr><td colspan="4">Não foi possível carregar.</td></tr>';
-          setMessage(instancesMessage, error.message, true);
+          localStorage.setItem(
+            SELECTED_COMPANY_KEY,
+            JSON.stringify({ id: companyId, name: companyName || companyId }),
+          );
+        } catch (err) {
+          /* ignore */
         }
-        instancesPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.location.href = "/manager/instances";
       }
 
       function escapeHtml(value) {
@@ -524,9 +443,11 @@
       });
       document.getElementById("reload").addEventListener("click", loadCompanies);
       document.getElementById("createCompany").addEventListener("click", createCompany);
-      closeInstancesBtn.addEventListener("click", () => {
-        instancesPanel.classList.add("hidden");
-      });
+      try {
+        localStorage.removeItem(SELECTED_COMPANY_KEY);
+      } catch (err) {
+        /* ignore */
+      }
       loadCompanies();
     </script>
   </body>

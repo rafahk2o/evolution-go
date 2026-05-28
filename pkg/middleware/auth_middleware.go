@@ -47,6 +47,15 @@ func (m middleware) AuthAdmin(ctx *gin.Context) {
 		return
 	}
 
+	if token == m.config.GlobalApiKey {
+		if companyID := ctx.GetHeader("X-Company-Id"); companyID != "" {
+			ctx.Set("companyId", companyID)
+			ctx.Set("isMaster", true)
+			ctx.Next()
+			return
+		}
+	}
+
 	company, err := m.companyService.AuthenticateAPIKey(token)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized"})

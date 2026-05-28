@@ -3,9 +3,47 @@
 
   var targetHref = "/assets/companies-admin.html";
   var linkId = "evolution-companies-admin-link";
+  var isMaster = null;
+  var masterCheckPromise = null;
 
   function isManagerPage() {
     return /^\/manager(\/|$)/.test(window.location.pathname);
+  }
+
+  function getStoredAuth() {
+    try {
+      return JSON.parse(localStorage.getItem("evolution-auth") || "{}");
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function checkIsMaster() {
+    if (isMaster !== null) return Promise.resolve(isMaster);
+    if (masterCheckPromise) return masterCheckPromise;
+
+    var auth = getStoredAuth();
+    var apiKey = (auth && auth.apiKey) || "";
+    if (!apiKey) {
+      isMaster = false;
+      return Promise.resolve(false);
+    }
+
+    var baseUrl = ((auth && auth.apiUrl) || window.location.origin).replace(/\/$/, "");
+
+    masterCheckPromise = fetch(baseUrl + "/company/all", {
+      headers: { apikey: apiKey },
+    })
+      .then(function (response) {
+        isMaster = response.ok;
+        return isMaster;
+      })
+      .catch(function () {
+        isMaster = false;
+        return false;
+      });
+
+    return masterCheckPromise;
   }
 
   function buildIcon() {
@@ -72,7 +110,7 @@
     return true;
   }
 
-  function boot() {
+  function startInjection() {
     if (injectLink()) return;
 
     var observer = new MutationObserver(function () {
@@ -87,6 +125,14 @@
     window.setTimeout(function () {
       observer.disconnect();
     }, 10000);
+  }
+
+  function boot() {
+    if (!isManagerPage()) return;
+    checkIsMaster().then(function (master) {
+      if (!master) return;
+      startInjection();
+    });
   }
 
   if (document.readyState === "loading") {
