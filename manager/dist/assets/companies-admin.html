@@ -4,8 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Empresas - Evolution GO</title>
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem("evolution-theme");
+          if (!theme) {
+            theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (err) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
     <style>
-      :root {
+      :root[data-theme="dark"] {
         color-scheme: dark;
         --bg: #050505;
         --panel: #151515;
@@ -15,6 +28,18 @@
         --muted: #a5b4c3;
         --primary: #00e995;
         --danger: #ff4d5e;
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --panel-2: #f1f3f6;
+        --border: #d4d8e0;
+        --text: #0f172a;
+        --muted: #475569;
+        --primary: #00a36b;
+        --danger: #dc2626;
       }
 
       * {
@@ -89,7 +114,7 @@
         width: 100%;
         border: 1px solid var(--border);
         border-radius: 6px;
-        background: #080808;
+        background: var(--panel-2);
         color: var(--text);
         font: inherit;
         padding: 10px 12px;
@@ -162,7 +187,7 @@
       code {
         border: 1px solid var(--border);
         border-radius: 5px;
-        background: #070707;
+        background: var(--panel-2);
         color: var(--muted);
         display: inline-block;
         max-width: 100%;
