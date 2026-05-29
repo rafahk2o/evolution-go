@@ -86,6 +86,7 @@ func (r *Routes) AssignRoutes(eng *gin.Engine) {
 			companyRoutes.POST("/create", r.companyHandler.Create)
 			companyRoutes.GET("/all", r.companyHandler.All)
 			companyRoutes.GET("/instances/:companyId", r.companyHandler.Instances)
+			companyRoutes.DELETE("/:companyId", r.companyHandler.Delete)
 		}
 	}
 

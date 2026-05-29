@@ -17,6 +17,9 @@ type CompanyRepository interface {
 	Create(name string, apiKey string) (*company_model.Company, error)
 	GetAll() ([]*company_model.Company, error)
 	GetByAPIKey(apiKey string) (*company_model.Company, error)
+	GetByID(id string) (*company_model.Company, error)
+	CountInstances(companyID string) (int64, error)
+	Delete(id string) error
 	EnsureDefaultCompany(apiKey string) (*company_model.Company, error)
 	BackfillInstances(companyID string) error
 }
@@ -59,6 +62,26 @@ func (r *companyRepository) GetByAPIKey(apiKey string) (*company_model.Company, 
 		return nil, err
 	}
 	return &company, nil
+}
+
+func (r *companyRepository) GetByID(id string) (*company_model.Company, error) {
+	var company company_model.Company
+	if err := r.db.Where("id = ?", id).First(&company).Error; err != nil {
+		return nil, err
+	}
+	return &company, nil
+}
+
+func (r *companyRepository) CountInstances(companyID string) (int64, error) {
+	var count int64
+	if err := r.db.Model(&instance_model.Instance{}).Where("company_id = ?", companyID).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *companyRepository) Delete(id string) error {
+	return r.db.Where("id = ?", id).Delete(&company_model.Company{}).Error
 }
 
 func (r *companyRepository) EnsureDefaultCompany(apiKey string) (*company_model.Company, error) {

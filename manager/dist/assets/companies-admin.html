@@ -199,6 +199,42 @@
         color: var(--primary);
       }
 
+      .row-actions {
+        align-items: center;
+        display: inline-flex;
+        gap: 8px;
+      }
+
+      .icon-button {
+        align-items: center;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--muted);
+        cursor: pointer;
+        display: inline-flex;
+        height: 32px;
+        justify-content: center;
+        min-height: 32px;
+        padding: 0;
+        width: 32px;
+      }
+
+      .icon-button:hover {
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+
+      .icon-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      .icon-button svg {
+        height: 16px;
+        width: 16px;
+      }
+
       @media (max-width: 840px) {
         header,
         main {
@@ -353,6 +389,9 @@
         return body;
       }
 
+      const trashIconSvg =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
+
       function renderCompanies(companies) {
         if (!companies.length) {
           companiesBody.innerHTML = '<tr><td colspan="5">Nenhuma empresa cadastrada.</td></tr>';
@@ -362,13 +401,23 @@
           .map((company) => {
             const createdAt = company.createdAt ? new Date(company.createdAt).toLocaleString() : "-";
             const id = escapeHtml(company.id || "");
-            const name = escapeHtml(company.name || "-");
+            const rawName = company.name || "-";
+            const name = escapeHtml(rawName);
+            const isDefault = rawName === "default";
+            const deleteBtn = isDefault
+              ? ""
+              : `<button class="icon-button delete-company" data-company-id="${id}" data-company-name="${name}" title="Excluir empresa" aria-label="Excluir empresa" type="button">${trashIconSvg}</button>`;
             return `<tr>
               <td>${name}</td>
               <td><code>${escapeHtml(company.id || "-")}</code></td>
               <td>${company.active ? "Ativa" : "Inativa"}</td>
               <td>${escapeHtml(createdAt)}</td>
-              <td><button class="row-button view-instances" data-company-id="${id}" data-company-name="${name}" type="button">Ver instâncias</button></td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-button view-instances" data-company-id="${id}" data-company-name="${name}" type="button">Ver instâncias</button>
+                  ${deleteBtn}
+                </div>
+              </td>
             </tr>`;
           })
           .join("");
@@ -380,6 +429,29 @@
             if (id) enterCompany(id, name);
           });
         });
+
+        companiesBody.querySelectorAll(".delete-company").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const id = btn.getAttribute("data-company-id");
+            const name = btn.getAttribute("data-company-name") || id;
+            if (!id) return;
+            if (!window.confirm(`Excluir a empresa "${name}"? Essa ação não pode ser desfeita.`)) return;
+            deleteCompany(btn, id);
+          });
+        });
+      }
+
+      async function deleteCompany(btn, companyId) {
+        btn.disabled = true;
+        setMessage(authMessage, "Excluindo empresa...");
+        try {
+          await request(`/company/${encodeURIComponent(companyId)}`, { method: "DELETE" });
+          setMessage(authMessage, "Empresa excluída.");
+          await loadCompanies();
+        } catch (error) {
+          setMessage(authMessage, error.message, true);
+          btn.disabled = false;
+        }
       }
 
       function enterCompany(companyId, companyName) {

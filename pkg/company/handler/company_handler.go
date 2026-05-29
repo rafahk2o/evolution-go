@@ -13,6 +13,7 @@ type CompanyHandler interface {
 	Create(ctx *gin.Context)
 	All(ctx *gin.Context)
 	Instances(ctx *gin.Context)
+	Delete(ctx *gin.Context)
 }
 
 type companyHandler struct {
@@ -60,6 +61,21 @@ func (h *companyHandler) Instances(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "success", "data": instances})
+}
+
+func (h *companyHandler) Delete(ctx *gin.Context) {
+	companyID := strings.TrimSpace(ctx.Param("companyId"))
+	if companyID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "companyId is required"})
+		return
+	}
+
+	if err := h.companyService.Delete(companyID); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 }
 
 func NewCompanyHandler(companyService company_service.CompanyService, instanceService instance_service.InstanceService) CompanyHandler {

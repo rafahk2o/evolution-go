@@ -14,6 +14,7 @@ type CompanyService interface {
 	Create(data *CreateStruct) (*CreateResult, error)
 	GetAll() ([]*company_model.Company, error)
 	AuthenticateAPIKey(apiKey string) (*company_model.Company, error)
+	Delete(id string) error
 	EnsureDefaultCompany(apiKey string) (*company_model.Company, error)
 	BackfillInstances(companyID string) error
 }
@@ -68,6 +69,32 @@ func (c *companies) AuthenticateAPIKey(apiKey string) (*company_model.Company, e
 		return nil, fmt.Errorf("api key is required")
 	}
 	return c.companyRepository.GetByAPIKey(apiKey)
+}
+
+func (c *companies) Delete(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("company id is required")
+	}
+
+	company, err := c.companyRepository.GetByID(id)
+	if err != nil {
+		return err
+	}
+
+	if company.Name == company_repository.DefaultCompanyName {
+		return fmt.Errorf("a empresa 'default' nao pode ser excluida")
+	}
+
+	count, err := c.companyRepository.CountInstances(id)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("a empresa possui %d instancia(s); remova-as antes de excluir", count)
+	}
+
+	return c.companyRepository.Delete(id)
 }
 
 func (c *companies) EnsureDefaultCompany(apiKey string) (*company_model.Company, error) {
