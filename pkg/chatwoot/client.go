@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	instance_model "github.com/EvolutionAPI/evolution-go/pkg/instance/model"
@@ -29,6 +30,7 @@ type Client struct {
 	mediaClient   *http.Client
 	loggerWrapper *logger_wrapper.LoggerManager
 	outgoing      *cache.Cache
+	convLocks     sync.Map
 }
 
 type Attachment struct {
@@ -309,6 +311,11 @@ func (c *Client) upsertContact(settings *instance_model.ChatwootSettings, messag
 }
 
 func (c *Client) findOrCreateConversation(settings *instance_model.ChatwootSettings, sourceID string) (int, error) {
+	lockValue, _ := c.convLocks.LoadOrStore(conversationLockKey(settings, sourceID), &sync.Mutex{})
+	lock := lockValue.(*sync.Mutex)
+	lock.Lock()
+	defer lock.Unlock()
+
 	path := fmt.Sprintf(
 		"/public/api/v1/inboxes/%s/contacts/%s/conversations",
 		url.PathEscape(settings.InboxIdentifier),
@@ -344,6 +351,17 @@ func (c *Client) findOrCreateConversation(settings *instance_model.ChatwootSetti
 		return 0, errors.New("chatwoot returned empty conversation id")
 	}
 	return created.ID, nil
+}
+
+func conversationLockKey(settings *instance_model.ChatwootSettings, sourceID string) string {
+	if settings == nil {
+		return sourceID
+	}
+	return strings.Join([]string{
+		strings.TrimRight(settings.URL, "/"),
+		settings.InboxIdentifier,
+		sourceID,
+	}, "\x00")
 }
 
 func (c *Client) createIncomingMessage(settings *instance_model.ChatwootSettings, sourceID string, conversationID int, message *IncomingMessage) error {
