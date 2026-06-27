@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -14,6 +17,63 @@ import (
 )
 
 const pcmChannelLabel = "pcm"
+
+const defaultWebRTCUDPPort = 50000
+
+type webRTCNetworkConfig struct {
+	publicIP string
+	udpPort  int
+}
+
+var (
+	sharedWebRTCAPIOnce sync.Once
+	sharedWebRTCAPI     *webrtc.API
+	sharedWebRTCCloser  io.Closer
+	sharedWebRTCErr     error
+)
+
+func loadWebRTCNetworkConfig() (webRTCNetworkConfig, bool, error) {
+	publicIP := strings.TrimSpace(os.Getenv("WEBRTC_PUBLIC_IP"))
+	portValue := strings.TrimSpace(os.Getenv("WEBRTC_UDP_PORT"))
+	if publicIP == "" && portValue == "" {
+		return webRTCNetworkConfig{}, false, nil
+	}
+	if publicIP == "" {
+		return webRTCNetworkConfig{}, false, errors.New("WEBRTC_PUBLIC_IP is required when WEBRTC_UDP_PORT is configured")
+	}
+
+	udpPort := defaultWebRTCUDPPort
+	if portValue != "" {
+		parsedPort, err := strconv.Atoi(portValue)
+		if err != nil || parsedPort < 1 || parsedPort > 65535 {
+			return webRTCNetworkConfig{}, false, fmt.Errorf("invalid WEBRTC_UDP_PORT %q: use a port from 1 to 65535", portValue)
+		}
+		udpPort = parsedPort
+	}
+	return webRTCNetworkConfig{publicIP: publicIP, udpPort: udpPort}, true, nil
+}
+
+func defaultWebRTCAPI() (*webrtc.API, error) {
+	sharedWebRTCAPIOnce.Do(func() {
+		config, enabled, err := loadWebRTCNetworkConfig()
+		if err != nil {
+			sharedWebRTCErr = err
+			return
+		}
+		if !enabled {
+			sharedWebRTCAPI = webrtc.NewAPI()
+			return
+		}
+
+		packetConn, err := net.ListenPacket("udp4", fmt.Sprintf(":%d", config.udpPort))
+		if err != nil {
+			sharedWebRTCErr = fmt.Errorf("listen on WebRTC UDP port %d: %w", config.udpPort, err)
+			return
+		}
+		sharedWebRTCAPI, sharedWebRTCCloser, sharedWebRTCErr = newWebRTCAPI(packetConn, config.publicIP)
+	})
+	return sharedWebRTCAPI, sharedWebRTCErr
+}
 
 func newWebRTCAPI(packetConn net.PacketConn, publicIP string) (*webrtc.API, io.Closer, error) {
 	if packetConn == nil {
@@ -59,7 +119,11 @@ func newWebRTCBridge(ctx context.Context, offerSDP string) (*webRTCBridge, strin
 	if offerSDP == "" {
 		return nil, "", ErrInvalidSDP
 	}
-	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	api, err := defaultWebRTCAPI()
+	if err != nil {
+		return nil, "", fmt.Errorf("configure WebRTC network: %w", err)
+	}
+	pc, err := api.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		return nil, "", fmt.Errorf("create peer connection: %w", err)
 	}

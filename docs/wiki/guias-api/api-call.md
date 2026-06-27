@@ -170,3 +170,17 @@ O widget gera um `X-Call-Client-ID` por navegador, usa a API key da própria
 instância e consome `/call/events` em segundo plano. Para acesso ao microfone fora
 de `localhost`, o Manager precisa ser servido por HTTPS. O navegador deve ter
 permissão de microfone e conectividade ICE com o servidor WebRTC.
+
+Quando a Evolution Go roda em Docker ou atrás de NAT, configure o IPv4 público e
+uma porta UDP única no `.env`:
+
+```env
+WEBRTC_PUBLIC_IP=203.0.113.10
+WEBRTC_UDP_PORT=50000
+```
+
+Substitua o endereço de exemplo pelo IPv4 público real do servidor. Publique a
+mesma porta como UDP no container e libere `50000/udp` no firewall do servidor e
+do provedor. O backend reutiliza essa porta para todas as conexões WebRTC. Sem
+esse caminho UDP, a sinalização pode fazer o telefone remoto tocar, mas o canal de
+áudio não abre e a chamada termina como perdida.
