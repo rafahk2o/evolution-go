@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"sync"
 	"sync/atomic"
 
@@ -12,6 +14,30 @@ import (
 )
 
 const pcmChannelLabel = "pcm"
+
+func newWebRTCAPI(packetConn net.PacketConn, publicIP string) (*webrtc.API, io.Closer, error) {
+	if packetConn == nil {
+		return nil, nil, errors.New("WebRTC UDP connection is required")
+	}
+	if ip := net.ParseIP(publicIP); ip == nil || ip.To4() == nil {
+		_ = packetConn.Close()
+		return nil, nil, fmt.Errorf("invalid WEBRTC_PUBLIC_IP %q: an IPv4 address is required", publicIP)
+	}
+
+	udpMux := webrtc.NewICEUDPMux(nil, packetConn)
+	settingEngine := webrtc.SettingEngine{}
+	settingEngine.SetICEUDPMux(udpMux)
+	if err := settingEngine.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
+		External:        []string{publicIP},
+		AsCandidateType: webrtc.ICECandidateTypeHost,
+		Mode:            webrtc.ICEAddressRewriteReplace,
+	}); err != nil {
+		_ = udpMux.Close()
+		return nil, nil, fmt.Errorf("configure WebRTC public IP: %w", err)
+	}
+
+	return webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)), udpMux, nil
+}
 
 type webRTCBridge struct {
 	pc *webrtc.PeerConnection

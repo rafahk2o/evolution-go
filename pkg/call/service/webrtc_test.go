@@ -50,6 +50,22 @@ func TestNewWebRTCAPIAdvertisesPublicIPOnSingleUDPPort(t *testing.T) {
 	}
 }
 
+func TestLoadWebRTCNetworkConfig(t *testing.T) {
+	t.Setenv("WEBRTC_PUBLIC_IP", " 203.0.113.10 ")
+	t.Setenv("WEBRTC_UDP_PORT", "50000")
+
+	config, enabled, err := loadWebRTCNetworkConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !enabled {
+		t.Fatal("expected WebRTC network configuration to be enabled")
+	}
+	if config.publicIP != "203.0.113.10" || config.udpPort != 50000 {
+		t.Fatalf("unexpected WebRTC network configuration: %+v", config)
+	}
+}
+
 func makeBrowserOffer(t *testing.T) (*webrtc.PeerConnection, *webrtc.DataChannel, string) {
 	t.Helper()
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
