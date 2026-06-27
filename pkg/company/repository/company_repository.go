@@ -112,7 +112,7 @@ func (r *companyRepository) EnsureDefaultCompany(apiKey string) (*company_model.
 
 func (r *companyRepository) BackfillInstances(companyID string) error {
 	return r.db.Model(&instance_model.Instance{}).
-		Where("company_id IS NULL OR company_id = ?", "").
+		Where("company_id IS NULL").
 		Update("company_id", companyID).Error
 }
 
