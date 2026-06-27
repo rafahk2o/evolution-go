@@ -6,4 +6,5 @@ coverage.*
 .air.toml
 .idea/
 .vscode/
+.worktrees/
 .DS_Store
