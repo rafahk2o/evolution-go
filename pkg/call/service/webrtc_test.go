@@ -3,12 +3,52 @@ package call_service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/pion/webrtc/v4"
 )
+
+func TestNewWebRTCAPIAdvertisesPublicIPOnSingleUDPPort(t *testing.T) {
+	packetConn, err := net.ListenPacket("udp4", "0.0.0.0:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := packetConn.LocalAddr().(*net.UDPAddr).Port
+
+	const publicIP = "203.0.113.10"
+	api, closer, err := newWebRTCAPI(packetConn, publicIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closer.Close()
+
+	pc, err := api.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	if _, err := pc.CreateDataChannel(pcmChannelLabel, nil); err != nil {
+		t.Fatal(err)
+	}
+	offer, err := pc.CreateOffer(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gather := webrtc.GatheringCompletePromise(pc)
+	if err := pc.SetLocalDescription(offer); err != nil {
+		t.Fatal(err)
+	}
+	<-gather
+
+	expectedCandidate := fmt.Sprintf(" %s %d typ host", publicIP, port)
+	if !strings.Contains(pc.LocalDescription().SDP, expectedCandidate) {
+		t.Fatalf("expected ICE candidate %q in SDP:\n%s", expectedCandidate, pc.LocalDescription().SDP)
+	}
+}
 
 func makeBrowserOffer(t *testing.T) (*webrtc.PeerConnection, *webrtc.DataChannel, string) {
 	t.Helper()
