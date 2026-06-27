@@ -10,8 +10,8 @@ import (
 	_ "github.com/EvolutionAPI/evolution-go/docs"
 	call_handler "github.com/EvolutionAPI/evolution-go/pkg/call/handler"
 	chat_handler "github.com/EvolutionAPI/evolution-go/pkg/chat/handler"
-	company_handler "github.com/EvolutionAPI/evolution-go/pkg/company/handler"
 	community_handler "github.com/EvolutionAPI/evolution-go/pkg/community/handler"
+	company_handler "github.com/EvolutionAPI/evolution-go/pkg/company/handler"
 	group_handler "github.com/EvolutionAPI/evolution-go/pkg/group/handler"
 	instance_handler "github.com/EvolutionAPI/evolution-go/pkg/instance/handler"
 	label_handler "github.com/EvolutionAPI/evolution-go/pkg/label/handler"
@@ -48,7 +48,7 @@ func (r *Routes) AssignRoutes(eng *gin.Engine) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Accept, Cache-Control, X-Requested-With, apikey, ApiKey, X-Company-Id")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Accept, Cache-Control, X-Requested-With, apikey, ApiKey, X-Company-Id, X-Call-Client-ID")
 		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length")
 
 		if c.Request.Method == "OPTIONS" {
@@ -206,7 +206,14 @@ func (r *Routes) AssignRoutes(eng *gin.Engine) {
 	{
 		routes.Use(r.authMiddleware.Auth)
 		{
-			routes.POST("/reject", r.jidValidationMiddleware.ValidateNumberField(), r.callHandler.RejectCall)
+			routes.POST("/start", r.callHandler.Start)
+			routes.GET("/active", r.callHandler.Active)
+			routes.GET("/events", r.callHandler.Events)
+			routes.POST("/reject", r.callHandler.RejectCall)
+			routes.POST("/:callId/webrtc", r.callHandler.WebRTC)
+			routes.POST("/:callId/accept", r.callHandler.Accept)
+			routes.POST("/:callId/reject", r.callHandler.Reject)
+			routes.DELETE("/:callId", r.callHandler.End)
 		}
 	}
 	routes = eng.Group("/community")

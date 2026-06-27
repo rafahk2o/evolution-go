@@ -50,7 +50,11 @@ import (
 	"github.com/EvolutionAPI/evolution-go/pkg/utils"
 )
 
+type CallEventHandler func(instance *instance_model.Instance, client *whatsmeow.Client, event any)
+
 type WhatsmeowService interface {
+	SetCallEventHandler(handler CallEventHandler)
+	DispatchCallEvent(instance *instance_model.Instance, client *whatsmeow.Client, event any)
 	StartClient(clientData *ClientData)
 	ConnectOnStartup(clientName string)
 	StartInstance(instanceId string) error
@@ -71,6 +75,8 @@ type clientVersion struct {
 }
 
 type whatsmeowService struct {
+	callEventMu        sync.RWMutex
+	callEventHandler   CallEventHandler
 	instanceRepository instance_repository.InstanceRepository
 	authDB             *sql.DB
 	messageRepository  message_repository.MessageRepository
@@ -137,6 +143,21 @@ type Values struct {
 
 func (v Values) Get(key string) string {
 	return v.m[key]
+}
+
+func (w *whatsmeowService) SetCallEventHandler(handler CallEventHandler) {
+	w.callEventMu.Lock()
+	w.callEventHandler = handler
+	w.callEventMu.Unlock()
+}
+
+func (w *whatsmeowService) DispatchCallEvent(instance *instance_model.Instance, client *whatsmeow.Client, event any) {
+	w.callEventMu.RLock()
+	handler := w.callEventHandler
+	w.callEventMu.RUnlock()
+	if handler != nil {
+		handler(instance, client, event)
+	}
 }
 
 type UserCollection struct {
@@ -847,6 +868,8 @@ func processPresenceUpdates(mycli *MyClient) {
 }
 
 func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
+	mycli.service.DispatchCallEvent(mycli.Instance, mycli.WAClient, rawEvt)
+
 	userID := mycli.userID
 	postMap := make(map[string]interface{})
 	postMap["data"] = rawEvt
@@ -1577,17 +1600,17 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			buttonClickMap := map[string]interface{}{
 				"event": "ButtonClick",
 				"data": map[string]interface{}{
-					"buttonId":     buttonClickData["buttonId"],
-					"buttonText":   buttonClickData["buttonText"],
-					"type":         buttonClickData["type"],
-					"phone":        dataMap["Sender"],
-					"jid":          dataMap["Sender"],
-					"pushName":     dataMap["PushName"],
-					"messageId":    dataMap["ID"],
-					"chat":         dataMap["Chat"],
-					"fromMe":       dataMap["FromMe"],
-					"timestamp":    evt.Info.Timestamp.Unix(),
-					"extraData":    buttonClickData,
+					"buttonId":   buttonClickData["buttonId"],
+					"buttonText": buttonClickData["buttonText"],
+					"type":       buttonClickData["type"],
+					"phone":      dataMap["Sender"],
+					"jid":        dataMap["Sender"],
+					"pushName":   dataMap["PushName"],
+					"messageId":  dataMap["ID"],
+					"chat":       dataMap["Chat"],
+					"fromMe":     dataMap["FromMe"],
+					"timestamp":  evt.Info.Timestamp.Unix(),
+					"extraData":  buttonClickData,
 				},
 				"instanceToken": mycli.token,
 				"instanceId":    mycli.userID,
@@ -1985,7 +2008,10 @@ func (w *whatsmeowService) CallWebhook(instance *instance_model.Instance, queueN
 
 	eventType, ok := data["event"].(string)
 	if !ok {
-		return
+		eventType, ok = data["type"].(string)
+		if !ok {
+			return
+		}
 	}
 
 	eventArray := strings.Split(instance.Events, ",")
@@ -2099,7 +2125,7 @@ func (w *whatsmeowService) CallWebhook(instance *instance_model.Instance, queueN
 			w.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Event received of type %s", instance.Id, eventType)
 			w.sendToQueueOrWebhook(instance, queueName, jsonData)
 		}
-	case "CallOffer", "CallAccept", "CallTerminate", "CallOfferNotice", "CallRelayLatency":
+	case "CallOffer", "CallAccept", "CallTerminate", "CallOfferNotice", "CallRelayLatency", "call.incoming", "call.status", "call.ended":
 		if contains(subscriptions, "CALL") {
 			w.loggerWrapper.GetLogger(instance.Id).LogInfo("[%s] Event received of type %s", instance.Id, eventType)
 			w.sendToQueueOrWebhook(instance, queueName, jsonData)
@@ -2388,7 +2414,7 @@ func (w *whatsmeowService) SendToGlobalQueues(eventType string, payload []byte, 
 				globalEventType = "HISTORY_SYNC"
 			case "ChatPresence", "Archive":
 				globalEventType = "CHAT_PRESENCE"
-			case "CallOffer", "CallAccept", "CallTerminate", "CallOfferNotice", "CallRelayLatency":
+			case "CallOffer", "CallAccept", "CallTerminate", "CallOfferNotice", "CallRelayLatency", "call.incoming", "call.status", "call.ended":
 				globalEventType = "CALL"
 			case "Connected", "PairSuccess", "TemporaryBan", "LoggedOut", "ConnectFailure", "Disconnected":
 				globalEventType = "CONNECTION"
@@ -2446,7 +2472,7 @@ func (w *whatsmeowService) SendToGlobalQueues(eventType string, payload []byte, 
 			globalEventType = "HISTORY_SYNC"
 		case "ChatPresence", "Archive":
 			globalEventType = "CHAT_PRESENCE"
-		case "CallOffer", "CallAccept", "CallTerminate", "CallOfferNotice", "CallRelayLatency":
+		case "CallOffer", "CallAccept", "CallTerminate", "CallOfferNotice", "CallRelayLatency", "call.incoming", "call.status", "call.ended":
 			globalEventType = "CALL"
 		case "Connected", "PairSuccess", "TemporaryBan", "LoggedOut", "ConnectFailure", "Disconnected":
 			globalEventType = "CONNECTION"

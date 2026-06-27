@@ -27,12 +27,12 @@ import (
 	chat_service "github.com/EvolutionAPI/evolution-go/pkg/chat/service"
 	chatwoot "github.com/EvolutionAPI/evolution-go/pkg/chatwoot"
 	chatwoot_handler "github.com/EvolutionAPI/evolution-go/pkg/chatwoot/handler"
+	community_handler "github.com/EvolutionAPI/evolution-go/pkg/community/handler"
+	community_service "github.com/EvolutionAPI/evolution-go/pkg/community/service"
 	company_handler "github.com/EvolutionAPI/evolution-go/pkg/company/handler"
 	company_model "github.com/EvolutionAPI/evolution-go/pkg/company/model"
 	company_repository "github.com/EvolutionAPI/evolution-go/pkg/company/repository"
 	company_service "github.com/EvolutionAPI/evolution-go/pkg/company/service"
-	community_handler "github.com/EvolutionAPI/evolution-go/pkg/community/handler"
-	community_service "github.com/EvolutionAPI/evolution-go/pkg/community/service"
 	config "github.com/EvolutionAPI/evolution-go/pkg/config"
 	"github.com/EvolutionAPI/evolution-go/pkg/core"
 	producer_interfaces "github.com/EvolutionAPI/evolution-go/pkg/events/interfaces"
@@ -202,6 +202,7 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 	chatService := chat_service.NewChatService(clientPointer, whatsmeowService, loggerWrapper)
 	groupService := group_service.NewGroupService(clientPointer, whatsmeowService, loggerWrapper)
 	callService := call_service.NewCallService(clientPointer, whatsmeowService, loggerWrapper)
+	whatsmeowService.SetCallEventHandler(callService.HandleWhatsAppEvent)
 	communityService := community_service.NewCommunityService(clientPointer, whatsmeowService, loggerWrapper)
 	labelService := label_service.NewLabelService(clientPointer, whatsmeowService, labelRepository, loggerWrapper)
 	newsletterService := newsletter_service.NewNewsletterService(clientPointer, whatsmeowService, loggerWrapper)
@@ -217,7 +218,7 @@ func setupRouter(db *gorm.DB, authDB *sql.DB, sqliteDB *sql.DB, config *config.C
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Accept, Cache-Control, X-Requested-With, apikey, ApiKey, X-Company-Id")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Accept, Cache-Control, X-Requested-With, apikey, ApiKey, X-Company-Id, X-Call-Client-ID")
 		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(200)

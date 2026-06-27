@@ -2,12 +2,66 @@ definitions:
   gin.H:
     additionalProperties: {}
     type: object
+  github_com_EvolutionAPI_evolution-go_pkg_call_service.Call:
+    properties:
+      callId:
+        type: string
+      clientId:
+        type: string
+      createdAt:
+        type: string
+      direction:
+        $ref: '#/definitions/github_com_EvolutionAPI_evolution-go_pkg_call_service.CallDirection'
+      endedAt:
+        type: string
+      instanceId:
+        type: string
+      peer:
+        type: string
+      reason:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_EvolutionAPI_evolution-go_pkg_call_service.CallStatus'
+      updatedAt:
+        type: string
+    type: object
+  github_com_EvolutionAPI_evolution-go_pkg_call_service.CallDirection:
+    enum:
+    - incoming
+    - outgoing
+    type: string
+    x-enum-varnames:
+    - DirectionIncoming
+    - DirectionOutgoing
+  github_com_EvolutionAPI_evolution-go_pkg_call_service.CallStatus:
+    enum:
+    - offered
+    - starting
+    - ringing
+    - connected
+    - ending
+    - ended
+    - rejected
+    - failed
+    type: string
+    x-enum-varnames:
+    - StatusOffered
+    - StatusStarting
+    - StatusRinging
+    - StatusConnected
+    - StatusEnding
+    - StatusEnded
+    - StatusRejected
+    - StatusFailed
   github_com_EvolutionAPI_evolution-go_pkg_call_service.RejectCallStruct:
     properties:
       callCreator:
         $ref: '#/definitions/go_mau_fi_whatsmeow_types.JID'
       callId:
         type: string
+    required:
+    - callCreator
+    - callId
     type: object
   github_com_EvolutionAPI_evolution-go_pkg_chat_service.BodyStruct:
     properties:
@@ -113,6 +167,27 @@ definitions:
       rejectCall:
         type: boolean
     type: object
+  github_com_EvolutionAPI_evolution-go_pkg_instance_model.ChatwootSettings:
+    properties:
+      accountId:
+        type: string
+      accountToken:
+        type: string
+      enableGroups:
+        type: boolean
+      enabled:
+        type: boolean
+      hmacToken:
+        type: string
+      inboxId:
+        type: string
+      inboxIdentifier:
+        type: string
+      url:
+        type: string
+      webhookToken:
+        type: string
+    type: object
   github_com_EvolutionAPI_evolution-go_pkg_instance_service.ConnectStruct:
     properties:
       immediate:
@@ -136,6 +211,10 @@ definitions:
     properties:
       advancedSettings:
         $ref: '#/definitions/github_com_EvolutionAPI_evolution-go_pkg_instance_model.AdvancedSettings'
+      chatwootSettings:
+        $ref: '#/definitions/github_com_EvolutionAPI_evolution-go_pkg_instance_model.ChatwootSettings'
+      companyId:
+        type: string
       instanceId:
         type: string
       name:
@@ -167,6 +246,8 @@ definitions:
         type: string
       port:
         type: string
+      protocol:
+        type: string
       username:
         type: string
     type: object
@@ -177,6 +258,8 @@ definitions:
       password:
         type: string
       port:
+        type: string
+      protocol:
         type: string
       username:
         type: string
@@ -241,6 +324,8 @@ definitions:
           type: string
         type: array
       number:
+        type: string
+      participant:
         type: string
     type: object
   github_com_EvolutionAPI_evolution-go_pkg_message_service.MessageStatusStruct:
@@ -786,6 +871,13 @@ definitions:
         example: Planos
         type: string
     type: object
+  github_com_EvolutionAPI_evolution-go_pkg_sendMessage_service.StatusTextStruct:
+    properties:
+      id:
+        type: string
+      text:
+        type: string
+    type: object
   github_com_EvolutionAPI_evolution-go_pkg_sendMessage_service.StickerStruct:
     properties:
       delay:
@@ -905,6 +997,8 @@ definitions:
     properties:
       collectionID:
         type: string
+      uploadOrderIndex:
+        type: integer
     type: object
   go_mau_fi_whatsmeow_proto_waAICommon.AIRegenerateMetadata:
     properties:
@@ -929,6 +1023,8 @@ definitions:
     type: object
   go_mau_fi_whatsmeow_proto_waAICommon.AIThreadInfo_AIThreadClientInfo:
     properties:
+      sourceChatJID:
+        type: string
       type:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waAICommon.AIThreadInfo_AIThreadClientInfo_AIThreadType'
     type: object
@@ -937,12 +1033,13 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
+    - 3
     type: integer
     x-enum-varnames:
     - AIThreadInfo_AIThreadClientInfo_UNKNOWN
     - AIThreadInfo_AIThreadClientInfo_DEFAULT
     - AIThreadInfo_AIThreadClientInfo_INCOGNITO
+    - AIThreadInfo_AIThreadClientInfo_SIDE_CHAT
   go_mau_fi_whatsmeow_proto_waAICommon.AIThreadInfo_AIThreadServerInfo:
     properties:
       title:
@@ -961,11 +1058,20 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - BotAgeCollectionMetadata_O18_BINARY
     - BotAgeCollectionMetadata_WAFFLE
+  go_mau_fi_whatsmeow_proto_waAICommon.BotAgentDeepLinkMetadata:
+    properties:
+      token:
+        type: string
+    type: object
+  go_mau_fi_whatsmeow_proto_waAICommon.BotAgentMetadata:
+    properties:
+      deepLinkMetadata:
+        $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waAICommon.BotAgentDeepLinkMetadata'
+    type: object
   go_mau_fi_whatsmeow_proto_waAICommon.BotCapabilityMetadata:
     properties:
       capabilities:
@@ -1033,7 +1139,10 @@ definitions:
     - 55
     - 56
     - 57
-    format: int32
+    - 58
+    - 59
+    - 60
+    - 61
     type: integer
     x-enum-varnames:
     - BotCapabilityMetadata_UNKNOWN
@@ -1094,6 +1203,10 @@ definitions:
     - BotCapabilityMetadata_RICH_RESPONSE_UR_BLOKS_ENABLED
     - BotCapabilityMetadata_RICH_RESPONSE_INLINE_LINKS_ENABLED
     - BotCapabilityMetadata_RICH_RESPONSE_UR_IMAGINE_VIDEO
+    - BotCapabilityMetadata_JSON_PATCH_STREAMING
+    - BotCapabilityMetadata_AI_TAB_FORCE_CLIPPY
+    - BotCapabilityMetadata_UNIFIED_RESPONSE_EMBEDDED_SCREENS
+    - BotCapabilityMetadata_AI_SUBSCRIPTION_ENABLED
   go_mau_fi_whatsmeow_proto_waAICommon.BotDocumentMessageMetadata:
     properties:
       pluginType:
@@ -1103,7 +1216,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - BotDocumentMessageMetadata_TEXT_EXTRACTION
@@ -1142,7 +1254,6 @@ definitions:
     - 12
     - 13
     - 14
-    format: int32
     type: integer
     x-enum-varnames:
     - BotFeedbackMessage_BOT_FEEDBACK_POSITIVE
@@ -1164,7 +1275,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - BotFeedbackMessage_NONE
@@ -1272,7 +1382,6 @@ definitions:
     - 2
     - 3
     - 4
-    format: int32
     type: integer
     x-enum-varnames:
     - BotImagineMetadata_UNKNOWN
@@ -1295,7 +1404,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - BotInfrastructureDiagnostics_AAPI
@@ -1308,7 +1416,6 @@ definitions:
   go_mau_fi_whatsmeow_proto_waAICommon.BotLinkedAccount_BotLinkedAccountType:
     enum:
     - 0
-    format: int32
     type: integer
     x-enum-varnames:
     - BotLinkedAccount_BOT_LINKED_ACCOUNT_TYPE_1P
@@ -1347,7 +1454,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - BotMediaMetadata_CENTER
@@ -1388,7 +1494,6 @@ definitions:
   go_mau_fi_whatsmeow_proto_waAICommon.BotMessageOrigin_BotMessageOriginType:
     enum:
     - 0
-    format: int32
     type: integer
     x-enum-varnames:
     - BotMessageOrigin_BOT_MESSAGE_ORIGIN_TYPE_AI_INITIATED
@@ -1537,7 +1642,7 @@ definitions:
     - 46
     - 47
     - 54
-    format: int32
+    - 55
     type: integer
     x-enum-varnames:
     - BotMetricsEntryPoint_UNDEFINED_ENTRY_POINT
@@ -1586,6 +1691,7 @@ definitions:
     - BotMetricsEntryPoint_WEB_INTRO_PANEL
     - BotMetricsEntryPoint_WEB_NAVIGATION_BAR
     - BotMetricsEntryPoint_GROUP_MEMBER
+    - BotMetricsEntryPoint_CHATLIST_SEARCH
   go_mau_fi_whatsmeow_proto_waAICommon.BotMetricsMetadata:
     properties:
       destinationEntryPoint:
@@ -1602,7 +1708,6 @@ definitions:
     - 3
     - 4
     - 5
-    format: int32
     type: integer
     x-enum-varnames:
     - BotMetricsThreadEntryPoint_AI_TAB_THREAD
@@ -1625,7 +1730,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - BotModeSelectionMetadata_DEFAULT_MODE
@@ -1644,7 +1748,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - BotModelMetadata_UNKNOWN_TYPE
@@ -1655,7 +1758,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - BotModelMetadata_UNKNOWN_STATUS
@@ -1693,7 +1795,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - BotPluginMetadata_UNKNOWN_PLUGIN
@@ -1705,7 +1806,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - BotPluginMetadata_UNKNOWN
@@ -1770,7 +1870,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - BotProgressIndicatorMetadata_BotPlanningStepMetadata_BotPlanningSearchSourcesMetadata_UNKNOWN
@@ -1794,7 +1893,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - BotProgressIndicatorMetadata_BotPlanningStepMetadata_UNKNOWN_PROVIDER
@@ -1807,7 +1905,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - BotProgressIndicatorMetadata_BotPlanningStepMetadata_UNKNOWN
@@ -1826,7 +1923,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - BotPromotionMessageMetadata_UNKNOWN_TYPE
@@ -1866,7 +1962,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - BotQuotaMetadata_BotFeatureQuotaMetadata_UNKNOWN_FEATURE
@@ -1890,7 +1985,6 @@ definitions:
     - 2
     - 3
     - 4
-    format: int32
     type: integer
     x-enum-varnames:
     - BotReminderMetadata_NOTIFY
@@ -1904,7 +1998,6 @@ definitions:
     - 3
     - 4
     - 5
-    format: int32
     type: integer
     x-enum-varnames:
     - BotReminderMetadata_ONCE
@@ -1952,7 +2045,6 @@ definitions:
     - 5
     - 6
     - 7
-    format: int32
     type: integer
     x-enum-varnames:
     - BotSessionSource_NONE
@@ -1975,7 +2067,6 @@ definitions:
       certificateChain:
         items:
           items:
-            format: int32
             type: integer
           type: array
         type: array
@@ -1993,7 +2084,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - BotSignatureVerificationUseCaseProof_UNSPECIFIED
@@ -2030,7 +2120,6 @@ definitions:
     - 2
     - 3
     - 4
-    format: int32
     type: integer
     x-enum-varnames:
     - BotSourcesMetadata_BotSourceItem_UNKNOWN
@@ -2168,7 +2257,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - SessionTransparencyType_UNKNOWN_TYPE
@@ -2197,7 +2285,6 @@ definitions:
     - 3
     - 4
     - 5
-    format: int32
     type: integer
     x-enum-varnames:
     - AIRichResponseCodeMetadata_AI_RICH_RESPONSE_CODE_HIGHLIGHT_DEFAULT
@@ -2224,7 +2311,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - AIRichResponseContentItemsMetadata_DEFAULT
@@ -2245,7 +2331,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - AIRichResponseDynamicMetadata_AI_RICH_RESPONSE_DYNAMIC_METADATA_TYPE_UNKNOWN
@@ -2285,7 +2370,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - AIRichResponseInlineImageMetadata_AI_RICH_RESPONSE_IMAGE_LAYOUT_LEADING_ALIGNED
@@ -2355,7 +2439,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - AIRichResponseMessageType_AI_RICH_RESPONSE_TYPE_UNKNOWN
@@ -2395,7 +2478,6 @@ definitions:
     - 7
     - 8
     - 9
-    format: int32
     type: integer
     x-enum-varnames:
     - AIRichResponseSubMessageType_AI_RICH_RESPONSE_UNKNOWN
@@ -2430,7 +2512,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - ADVEncryptionType_E2EE
@@ -2442,6 +2523,8 @@ definitions:
       fullSyncDaysLimit:
         type: integer
       fullSyncSizeMbLimit:
+        type: integer
+      initialSyncMaxMessagesPerChat:
         type: integer
       inlineInitialPayloadInE2EeMsg:
         type: boolean
@@ -2467,7 +2550,11 @@ definitions:
         type: boolean
       supportGuestChat:
         type: boolean
+      supportHatchHistory:
+        type: boolean
       supportHostedGroupMsg:
+        type: boolean
+      supportManusHistory:
         type: boolean
       supportMessageAssociation:
         type: boolean
@@ -2636,7 +2723,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - BCallMessage_UNKNOWN
@@ -2687,7 +2773,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - ButtonsMessage_Button_UNKNOWN
@@ -2702,7 +2787,6 @@ definitions:
     - 4
     - 5
     - 6
-    format: int32
     type: integer
     x-enum-varnames:
     - ButtonsMessage_UNKNOWN
@@ -2727,7 +2811,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - ButtonsResponseMessage_UNKNOWN
@@ -2788,7 +2871,6 @@ definitions:
     - 5
     - 6
     - 7
-    format: int32
     type: integer
     x-enum-varnames:
     - CallLogMessage_CONNECTED
@@ -2811,7 +2893,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - CallLogMessage_REGULAR
@@ -2849,7 +2930,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - CloudAPIThreadControlNotification_UNKNOWN
@@ -2888,7 +2968,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - ConditionalRevealMessage_UNKNOWN
@@ -3066,7 +3145,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_AdReplyInfo_NONE
@@ -3121,6 +3199,8 @@ definitions:
         type: boolean
       containsAutoReply:
         type: boolean
+      containsCtwaFlowsAutoReply:
+        type: boolean
       ctaPayload:
         type: string
       ctwaClid:
@@ -3166,7 +3246,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_ExternalAdReplyInfo_CTWA
@@ -3176,7 +3255,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_ExternalAdReplyInfo_NONE
@@ -3203,7 +3281,6 @@ definitions:
     - 3
     - 4
     - 5
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_UNKNOWN
@@ -3232,7 +3309,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_ForwardedNewsletterMessageInfo_UPDATE
@@ -3249,7 +3325,6 @@ definitions:
     - 6
     - 7
     - 8
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_NOT_PAIRED_MEDIA
@@ -3279,7 +3354,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_EXPLICIT
@@ -3291,7 +3365,6 @@ definitions:
     - 2
     - 3
     - 4
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_NONE
@@ -3312,7 +3385,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_StatusAudienceMetadata_UNKNOWN
@@ -3325,7 +3397,6 @@ definitions:
     - 3
     - 4
     - 5
-    format: int32
     type: integer
     x-enum-varnames:
     - ContextInfo_IMAGE
@@ -3399,7 +3470,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - DisappearingMode_CHANGED_IN_CHAT
@@ -3414,7 +3484,6 @@ definitions:
     - 3
     - 4
     - 5
-    format: int32
     type: integer
     x-enum-varnames:
     - DisappearingMode_UNKNOWN
@@ -3563,6 +3632,25 @@ definitions:
       targetMessageKey:
         $ref: '#/definitions/waCommon.MessageKey'
     type: object
+  go_mau_fi_whatsmeow_proto_waE2E.EventInviteMessage:
+    properties:
+      JPEGThumbnail:
+        items:
+          type: integer
+        type: array
+      caption:
+        type: string
+      contextInfo:
+        $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.ContextInfo'
+      eventID:
+        type: string
+      eventTitle:
+        type: string
+      isCanceled:
+        type: boolean
+      startTime:
+        type: integer
+    type: object
   go_mau_fi_whatsmeow_proto_waE2E.EventMessage:
     properties:
       contextInfo:
@@ -3679,7 +3767,6 @@ definitions:
     - 8
     - 9
     - 10
-    format: int32
     type: integer
     x-enum-varnames:
     - ExtendedTextMessage_SYSTEM
@@ -3696,7 +3783,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - ExtendedTextMessage_DEFAULT
@@ -3711,7 +3797,6 @@ definitions:
     - 5
     - 6
     - 7
-    format: int32
     type: integer
     x-enum-varnames:
     - ExtendedTextMessage_NONE
@@ -3768,7 +3853,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - GroupInviteMessage_DEFAULT
@@ -3869,7 +3953,6 @@ definitions:
     - 6
     - 7
     - 8
-    format: int32
     type: integer
     x-enum-varnames:
     - HistorySyncType_INITIAL_BOOTSTRAP
@@ -3983,7 +4066,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - ImageMessage_USER_IMAGE
@@ -3995,6 +4077,20 @@ definitions:
       securityNotificationEnabled:
         type: boolean
     type: object
+  go_mau_fi_whatsmeow_proto_waE2E.InsightDeliveryState:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    type: integer
+    x-enum-varnames:
+    - InsightDeliveryState_SENT
+    - InsightDeliveryState_DELIVERED
+    - InsightDeliveryState_READ
+    - InsightDeliveryState_REPLIED
+    - InsightDeliveryState_QUICK_REPLIED
   go_mau_fi_whatsmeow_proto_waE2E.InteractiveAnnotation:
     properties:
       action:
@@ -4015,7 +4111,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - InteractiveAnnotation_RASTERIZED_LINK_PREVIEW
@@ -4094,7 +4189,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - InteractiveResponseMessage_Body_DEFAULT
@@ -4134,7 +4228,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - InvoiceMessage_IMAGE
@@ -4153,7 +4246,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - KeepType_UNKNOWN_KEEP_TYPE
@@ -4195,7 +4287,6 @@ definitions:
     - 3
     - 4
     - 5
-    format: int32
     type: integer
     x-enum-varnames:
     - LinkPreviewMetadata_NONE
@@ -4230,7 +4321,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - ListMessage_UNKNOWN
@@ -4305,7 +4395,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - ListResponseMessage_UNKNOWN
@@ -4406,7 +4495,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - MediaKeyDomain_MEDIA_KEY_DOMAIN_UNKNOWN
@@ -4488,6 +4576,8 @@ definitions:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.FutureProofMessage'
       eventCoverImage:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.FutureProofMessage'
+      eventInviteMessage:
+        $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.EventInviteMessage'
       eventMessage:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.EventMessage'
       extendedTextMessage:
@@ -4667,7 +4757,6 @@ definitions:
     - 18
     - 19
     - 20
-    format: int32
     type: integer
     x-enum-varnames:
     - MessageAssociation_UNKNOWN
@@ -4738,7 +4827,6 @@ definitions:
     enum:
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - MessageContextInfo_STATIC
@@ -4780,7 +4868,9 @@ definitions:
         items:
           type: string
         type: array
-      oldestMessageTimestamp:
+      oldestMessageTimestampInBundle:
+        type: integer
+      oldestMessageTimestampInWindow:
         type: integer
     type: object
   go_mau_fi_whatsmeow_proto_waE2E.MessageHistoryNotice:
@@ -4871,7 +4961,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - OrderMessage_INQUIRY
@@ -4880,7 +4969,6 @@ definitions:
   go_mau_fi_whatsmeow_proto_waE2E.OrderMessage_OrderSurface:
     enum:
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - OrderMessage_CATALOG
@@ -4930,7 +5018,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - PaymentBackground_UNKNOWN
@@ -4948,18 +5035,27 @@ definitions:
         type: integer
       incentiveEligible:
         type: boolean
+      inviteType:
+        $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PaymentInviteMessage_InviteType'
       referralID:
         type: string
       serviceType:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PaymentInviteMessage_ServiceType'
     type: object
+  go_mau_fi_whatsmeow_proto_waE2E.PaymentInviteMessage_InviteType:
+    enum:
+    - 0
+    - 1
+    type: integer
+    x-enum-varnames:
+    - PaymentInviteMessage_DEFAULT
+    - PaymentInviteMessage_MAPPER
   go_mau_fi_whatsmeow_proto_waE2E.PaymentInviteMessage_ServiceType:
     enum:
     - 0
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - PaymentInviteMessage_UNKNOWN
@@ -4989,7 +5085,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - PaymentLinkMetadata_PaymentLinkHeader_LINK_PREVIEW
@@ -5001,6 +5096,10 @@ definitions:
     type: object
   go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestMessage:
     properties:
+      bizBroadcastInsightsContactListRequest:
+        $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestMessage_BizBroadcastInsightsContactListRequest'
+      bizBroadcastInsightsRefreshRequest:
+        $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestMessage_BizBroadcastInsightsRefreshRequest'
       companionCanonicalUserNonceFetchRequest:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestMessage_CompanionCanonicalUserNonceFetchRequest'
       fullHistorySyncOnDemandRequest:
@@ -5027,6 +5126,16 @@ definitions:
         type: array
       syncdCollectionFatalRecoveryRequest:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestMessage_SyncDCollectionFatalRecoveryRequest'
+    type: object
+  go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestMessage_BizBroadcastInsightsContactListRequest:
+    properties:
+      campaignID:
+        type: string
+    type: object
+  go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestMessage_BizBroadcastInsightsRefreshRequest:
+    properties:
+      campaignID:
+        type: string
     type: object
   go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestMessage_CompanionCanonicalUserNonceFetchRequest:
     properties:
@@ -5059,7 +5168,6 @@ definitions:
     enum:
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - PeerDataOperationRequestMessage_GalaxyFlowAction_NOTIFY_LAUNCH
@@ -5127,6 +5235,8 @@ definitions:
     type: object
   go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult:
     properties:
+      bizBroadcastInsightsContactListResponse:
+        $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult_BizBroadcastInsightsContactListResponse'
       companionCanonicalUserNonceFetchRequestResponse:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult_CompanionCanonicalUserNonceFetchResponse'
       companionMetaNonceFetchRequestResponse:
@@ -5149,6 +5259,24 @@ definitions:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult_SyncDSnapshotFatalRecoveryResponse'
       waffleNonceFetchRequestResponse:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult_WaffleNonceFetchResponse'
+    type: object
+  ? go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult_BizBroadcastInsightsContactListResponse
+  : properties:
+      campaignID:
+        type: string
+      contacts:
+        items:
+          $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult_BizBroadcastInsightsContactState'
+        type: array
+      timestampMS:
+        type: integer
+    type: object
+  go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult_BizBroadcastInsightsContactState:
+    properties:
+      contactJID:
+        type: string
+      state:
+        $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.InsightDeliveryState'
     type: object
   ? go_mau_fi_whatsmeow_proto_waE2E.PeerDataOperationRequestResponseMessage_PeerDataOperationResult_CompanionCanonicalUserNonceFetchResponse
   : properties:
@@ -5209,7 +5337,6 @@ definitions:
     - 4
     - 5
     - 6
-    format: int32
     type: integer
     x-enum-varnames:
     - PeerDataOperationRequestResponseMessage_PeerDataOperationResult_REQUEST_SUCCESS
@@ -5240,7 +5367,6 @@ definitions:
     - 4
     - 5
     - 6
-    format: int32
     type: integer
     x-enum-varnames:
     - PeerDataOperationRequestResponseMessage_PeerDataOperationResult_GENERATION_ERROR
@@ -5339,7 +5465,8 @@ definitions:
     - 9
     - 10
     - 11
-    format: int32
+    - 12
+    - 13
     type: integer
     x-enum-varnames:
     - PeerDataOperationRequestType_UPLOAD_STICKER
@@ -5354,6 +5481,8 @@ definitions:
     - PeerDataOperationRequestType_COMPANION_CANONICAL_USER_NONCE_FETCH
     - PeerDataOperationRequestType_HISTORY_SYNC_CHUNK_RETRY
     - PeerDataOperationRequestType_GALAXY_FLOW_ACTION
+    - PeerDataOperationRequestType_BUSINESS_BROADCAST_INSIGHTS_DELIVERED_TO
+    - PeerDataOperationRequestType_BUSINESS_BROADCAST_INSIGHTS_REFRESH
   go_mau_fi_whatsmeow_proto_waE2E.PinInChatMessage:
     properties:
       key:
@@ -5368,7 +5497,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - PinInChatMessage_UNKNOWN_TYPE
@@ -5382,7 +5510,6 @@ definitions:
   go_mau_fi_whatsmeow_proto_waE2E.PlaceholderMessage_PlaceholderType:
     enum:
     - 0
-    format: int32
     type: integer
     x-enum-varnames:
     - PlaceholderMessage_MASK_LINKED_DEVICES
@@ -5409,7 +5536,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - PollContentType_UNKNOWN_POLL_CONTENT_TYPE
@@ -5486,7 +5612,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - PollType_POLL
@@ -5533,7 +5658,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - ProcessedVideo_UNDEFINED
@@ -5678,7 +5802,7 @@ definitions:
     - 30
     - 31
     - 32
-    format: int32
+    - 33
     type: integer
     x-enum-varnames:
     - ProtocolMessage_REVOKE
@@ -5709,6 +5833,7 @@ definitions:
     - ProtocolMessage_GROUP_MEMBER_LABEL_CHANGE
     - ProtocolMessage_AI_MEDIA_COLLECTION_MESSAGE
     - ProtocolMessage_MESSAGE_UNSCHEDULE
+    - ProtocolMessage_BOT_UNLINK_MESSAGE
   go_mau_fi_whatsmeow_proto_waE2E.QuestionResponseMessage:
     properties:
       key:
@@ -5751,6 +5876,8 @@ definitions:
     type: object
   go_mau_fi_whatsmeow_proto_waE2E.RequestWelcomeMessageMetadata:
     properties:
+      botAgentMetadata:
+        $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waAICommon.BotAgentMetadata'
       localChatState:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waE2E.RequestWelcomeMessageMetadata_LocalChatState'
       welcomeTrigger:
@@ -5760,7 +5887,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - RequestWelcomeMessageMetadata_EMPTY
@@ -5769,7 +5895,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - RequestWelcomeMessageMetadata_CHAT_OPEN
@@ -5788,7 +5913,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - ScheduledCallCreationMessage_UNKNOWN
@@ -5805,7 +5929,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - ScheduledCallEditMessage_UNKNOWN
@@ -5835,7 +5958,6 @@ definitions:
     - 3
     - 4
     - 5
-    format: int32
     type: integer
     x-enum-varnames:
     - SecretEncryptedMessage_UNKNOWN
@@ -5879,7 +6001,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - StatusNotificationMessage_UNKNOWN
@@ -5909,7 +6030,6 @@ definitions:
   go_mau_fi_whatsmeow_proto_waE2E.StatusQuotedMessage_StatusQuotedMessageType:
     enum:
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - StatusQuotedMessage_QUESTION_ANSWER
@@ -5926,7 +6046,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - StatusStickerInteractionMessage_UNKNOWN
@@ -6069,7 +6188,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - StickerPackMessage_FIRST_PARTY
@@ -6129,8 +6247,6 @@ definitions:
     type: object
   go_mau_fi_whatsmeow_proto_waE2E.ThreadID:
     properties:
-      sourceChatJID:
-        type: string
       threadKey:
         $ref: '#/definitions/waCommon.MessageKey'
       threadType:
@@ -6141,7 +6257,6 @@ definitions:
     - 0
     - 1
     - 2
-    format: int32
     type: integer
     x-enum-varnames:
     - ThreadID_UNKNOWN
@@ -6270,7 +6385,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - VideoMessage_NONE
@@ -6281,7 +6395,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - VideoMessage_USER_VIDEO
@@ -6290,7 +6403,6 @@ definitions:
     enum:
     - 0
     - 1
-    format: int32
     type: integer
     x-enum-varnames:
     - WebLinkRenderConfig_WEBVIEW
@@ -6301,7 +6413,6 @@ definitions:
     - 1
     - 2
     - 3
-    format: int32
     type: integer
     x-enum-varnames:
     - MediaRetryNotification_GENERAL_ERROR
@@ -6328,7 +6439,8 @@ definitions:
     - 6
     - 7
     - 8
-    format: int32
+    - 9
+    - 10
     type: integer
     x-enum-varnames:
     - StatusAttribution_UNKNOWN
@@ -6340,6 +6452,8 @@ definitions:
     - StatusAttribution_RL_ATTRIBUTION
     - StatusAttribution_AI_CREATED
     - StatusAttribution_LAYOUTS
+    - StatusAttribution_NEWSLETTER_STATUS
+    - StatusAttribution_STATUS_CLOSE_SHARING
   go_mau_fi_whatsmeow_proto_waVnameCert.LocalizedName:
     properties:
       lc:
@@ -6424,13 +6538,6 @@ definitions:
     type: string
     x-enum-comments:
       EditAttributeAdminEdit: only used in newsletters
-    x-enum-descriptions:
-    - ""
-    - ""
-    - ""
-    - only used in newsletters
-    - ""
-    - ""
     x-enum-varnames:
     - EditAttributeEmpty
     - EditAttributeMessageEdit
@@ -6441,13 +6548,10 @@ definitions:
   go_mau_fi_whatsmeow_types.JID:
     properties:
       device:
-        format: int32
         type: integer
       integrator:
-        format: int32
         type: integer
       rawAgent:
-        format: int32
         type: integer
       server:
         type: string
@@ -6579,6 +6683,20 @@ definitions:
       details:
         $ref: '#/definitions/go_mau_fi_whatsmeow_proto_waVnameCert.VerifiedNameCertificate_Details'
     type: object
+  pkg_call_handler.startRequest:
+    properties:
+      number:
+        type: string
+    required:
+    - number
+    type: object
+  pkg_call_handler.webRTCRequest:
+    properties:
+      sdpOffer:
+        type: string
+    required:
+    - sdpOffer
+    type: object
   waCommon.LimitSharing:
     properties:
       initiatedByMe:
@@ -6607,11 +6725,144 @@ info:
   title: Evolution GO
   version: "1.0"
 paths:
+  /call/{callId}:
+    delete:
+      parameters:
+      - description: Call ID
+        in: path
+        name: callId
+        required: true
+        type: string
+      - description: Call client identifier
+        in: header
+        name: X-Call-Client-ID
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_EvolutionAPI_evolution-go_pkg_call_service.Call'
+      summary: End a call
+      tags:
+      - Call
+  /call/{callId}/accept:
+    post:
+      parameters:
+      - description: Call ID
+        in: path
+        name: callId
+        required: true
+        type: string
+      - description: Call client identifier
+        in: header
+        name: X-Call-Client-ID
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Accept an incoming call
+      tags:
+      - Call
+  /call/{callId}/reject:
+    post:
+      parameters:
+      - description: Call ID
+        in: path
+        name: callId
+        required: true
+        type: string
+      - description: Call client identifier
+        in: header
+        name: X-Call-Client-ID
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_EvolutionAPI_evolution-go_pkg_call_service.Call'
+      summary: Reject an incoming call
+      tags:
+      - Call
+  /call/{callId}/webrtc:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Call ID
+        in: path
+        name: callId
+        required: true
+        type: string
+      - description: Call client identifier
+        in: header
+        name: X-Call-Client-ID
+        required: true
+        type: string
+      - description: SDP offer
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_call_handler.webRTCRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Negotiate call WebRTC
+      tags:
+      - Call
+  /call/active:
+    get:
+      parameters:
+      - description: Optional call client filter
+        in: header
+        name: X-Call-Client-ID
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List active calls
+      tags:
+      - Call
+  /call/events:
+    get:
+      parameters:
+      - description: Optional call client filter
+        in: header
+        name: X-Call-Client-ID
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Stream call events
+      tags:
+      - Call
   /call/reject:
     post:
       consumes:
       - application/json
-      description: Reject call
+      description: Reject a WhatsApp call using callCreator and callId.
       parameters:
       - description: Call data
         in: body
@@ -6623,14 +6874,53 @@ paths:
       - application/json
       responses:
         "200":
-          description: success
+          description: OK
           schema:
             $ref: '#/definitions/gin.H'
-        "500":
-          description: Internal server error
+      summary: Reject call (legacy)
+      tags:
+      - Call
+  /call/start:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Call client identifier
+        in: header
+        name: X-Call-Client-ID
+        required: true
+        type: string
+      - description: Destination
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_call_handler.startRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
           schema:
             $ref: '#/definitions/gin.H'
-      summary: Reject call
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/gin.H'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/gin.H'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/gin.H'
+      summary: Start a WhatsApp voice call
       tags:
       - Call
   /chat/archive:
@@ -7308,6 +7598,67 @@ paths:
           schema:
             $ref: '#/definitions/gin.H'
       summary: Update advanced settings
+      tags:
+      - Instance
+  /instance/{instanceId}/chatwoot-settings:
+    get:
+      description: Get Chatwoot API Inbox settings for a specific instance
+      parameters:
+      - description: Instance ID
+        in: path
+        name: instanceId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Chatwoot settings retrieved successfully
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Invalid instance ID
+          schema:
+            $ref: '#/definitions/gin.H'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/gin.H'
+      summary: Get Chatwoot settings
+      tags:
+      - Instance
+    put:
+      consumes:
+      - application/json
+      description: Update Chatwoot API Inbox settings for a specific instance
+      parameters:
+      - description: Instance ID
+        in: path
+        name: instanceId
+        required: true
+        type: string
+      - description: Chatwoot settings data
+        in: body
+        name: settings
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_EvolutionAPI_evolution-go_pkg_instance_model.ChatwootSettings'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Chatwoot settings updated successfully
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Invalid request data
+          schema:
+            $ref: '#/definitions/gin.H'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/gin.H'
+      summary: Update Chatwoot settings
       tags:
       - Instance
   /instance/all:
@@ -8466,6 +8817,83 @@ paths:
           schema:
             $ref: '#/definitions/gin.H'
       summary: Send a poll message
+      tags:
+      - Send Message
+  /send/status/media:
+    post:
+      consumes:
+      - application/json
+      - ' multipart/form-data'
+      description: Send an image or video status to status@broadcast. Supports JSON
+        (URL) or multipart/form-data (file upload)
+      parameters:
+      - description: 'Media type: image or video'
+        in: formData
+        name: type
+        required: true
+        type: string
+      - description: Media file (for multipart upload)
+        in: formData
+        name: file
+        type: file
+      - description: Media URL (for JSON upload)
+        in: formData
+        name: url
+        type: string
+      - description: Caption for the media
+        in: formData
+        name: caption
+        type: string
+      - description: Custom message ID
+        in: formData
+        name: id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Error on validation
+          schema:
+            $ref: '#/definitions/gin.H'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/gin.H'
+      summary: Send a WhatsApp media status (image/video)
+      tags:
+      - Send Message
+  /send/status/text:
+    post:
+      consumes:
+      - application/json
+      description: Send a WhatsApp text status to status@broadcast
+      parameters:
+      - description: Status text data
+        in: body
+        name: message
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_EvolutionAPI_evolution-go_pkg_sendMessage_service.StatusTextStruct'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Error on validation
+          schema:
+            $ref: '#/definitions/gin.H'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/gin.H'
+      summary: Send a WhatsApp text status
       tags:
       - Send Message
   /send/sticker:

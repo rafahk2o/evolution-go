@@ -1,223 +1,156 @@
-# API de Chamadas
+# API de chamadas de voz
 
-Documentação do endpoint para gerenciar chamadas WhatsApp.
+A Evolution Go realiza e recebe chamadas de voz usando o mesmo `whatsmeow.Client`
+da instância autenticada. O áudio do navegador usa um data channel WebRTC chamado
+`pcm`, com amostras signed 16-bit little-endian, mono, 16 kHz.
 
-## 📋 Índice
+Todas as rotas exigem a API key normal da instância. O header
+`X-Call-Client-ID` identifica o operador para ownership; ele não substitui a
+autenticação.
 
-- [Rejeitar Chamada](#rejeitar-chamada)
+## Iniciar chamada
 
----
+`POST /call/start`
 
-## Rejeitar Chamada
-
-Rejeita uma chamada recebida no WhatsApp.
-
-**Endpoint**: `POST /call/reject`
-
-**Headers**:
-```
+```http
+X-Call-Client-ID: operador-123
 Content-Type: application/json
-apikey: SUA-CHAVE-API
 ```
 
-**Body**:
 ```json
-{
-  "callCreator": "5511999999999@s.whatsapp.net",
-  "callId": "ABC123XYZ"
-}
+{"number":"5511999999999"}
 ```
 
-**Parâmetros**:
+Resposta `201 Created`:
 
-| Campo | Tipo | Obrigatório | Descrição |
-|-------|------|-------------|-----------|
-| `callCreator` | string (JID) | ✅ Sim | JID de quem está ligando |
-| `callId` | string | ✅ Sim | ID da chamada |
-
-**Nota**: Os dados da chamada (`callCreator` e `callId`) são recebidos via webhook quando uma chamada chega. Você deve capturar esses dados do evento `call` para usar este endpoint.
-
-**Resposta de Sucesso (200)**:
 ```json
-{
-  "message": "success"
-}
+{"callId":"call-id","direction":"outgoing","status":"starting"}
 ```
 
-**Resposta de Erro (400)**:
+## Negociar WebRTC
+
+`POST /call/:callId/webrtc`
+
 ```json
-{
-  "error": "invalid request body"
-}
+{"sdpOffer":"v=0..."}
 ```
 
-**Resposta de Erro (500)**:
+Resposta `200 OK`:
+
 ```json
-{
-  "error": "instance not found"
-}
+{"sdpAnswer":"v=0..."}
 ```
 
-**Exemplo cURL**:
-```bash
-curl -X POST http://localhost:4000/call/reject \
-  -H "Content-Type: application/json" \
-  -H "apikey: SUA-CHAVE-API" \
-  -d '{
-    "callCreator": "5511999999999@s.whatsapp.net",
-    "callId": "ABC123XYZ"
-  }'
-```
+O navegador deve criar o data channel `pcm` antes de gerar a oferta. Em chamadas
+recebidas, a primeira oferta SDP válida faz o claim atômico da chamada. Outro
+`X-Call-Client-ID` recebe `409 Conflict`. A negociação expira após 30 segundos.
 
----
+## Aceitar chamada recebida
 
-## Fluxo Completo de Rejeição Automática
+`POST /call/:callId/accept`
 
-### 1. Receber Evento de Chamada via Webhook
+O mesmo `X-Call-Client-ID` que negociou WebRTC deve fazer o aceite. O data channel
+precisa estar aberto; caso contrário, a resposta é `409 Conflict`.
 
-Quando alguém liga para sua instância, você recebe um webhook:
+## Rejeitar chamada recebida
+
+`POST /call/:callId/reject`
+
+Exige `X-Call-Client-ID`, rejeita a chamada e libera mídia e ownership.
+
+O endpoint legado permanece disponível:
+
+`POST /call/reject`
 
 ```json
 {
-  "event": "call",
-  "instance": "minha-instancia",
-  "data": {
-    "id": "ABC123XYZ",
-    "from": "5511999999999@s.whatsapp.net",
-    "timestamp": "2025-11-11T10:30:00Z",
-    "isVideo": false,
-    "isGroup": false
-  }
+  "callCreator":"5511999999999@s.whatsapp.net",
+  "callId":"call-id"
 }
 ```
 
-### 2. Rejeitar Automaticamente
+O endpoint legado não exige `X-Call-Client-ID` e delega ao mesmo serviço quando a
+chamada está no registry.
 
-No seu servidor que recebe webhooks, quando chegar um evento de chamada:
-1. Capture o `id` e o `from` do evento
-2. Faça uma requisição POST para `/call/reject`
-3. Use os dados capturados como `callId` e `callCreator`
+## Encerrar chamada
 
-Dessa forma, chamadas são rejeitadas automaticamente assim que chegam.
+`DELETE /call/:callId`
 
-### 3. Rejeição Seletiva
+Exige o proprietário. Durante a retenção terminal de 60 segundos, chamadas já
+encerradas retornam o estado final de forma idempotente.
 
-Para rejeitar apenas chamadas de números não autorizados:
-1. Mantenha uma lista de números permitidos
-2. Ao receber evento de chamada, verifique se o número está na lista
-3. Se não estiver, rejeite a chamada usando o endpoint `/call/reject`
-4. Se estiver autorizado, não faça nada (deixe tocar)
+## Listar chamadas ativas
 
----
+`GET /call/active`
 
-## Casos de Uso
-
-### 1. Rejeitar Todas as Chamadas
-
-Útil para contas de atendimento que só respondem via mensagens:
-1. Configure seu webhook para receber eventos de chamada
-2. Quando receber evento `call`, rejeite imediatamente
-3. Envie uma mensagem de texto explicando que não atende chamadas
-
-### 2. Horário Comercial
-
-Rejeitar chamadas fora do horário de trabalho:
-1. Ao receber evento de chamada, verifique o horário atual
-2. Se estiver fora do horário comercial (ex: Segunda a Sexta, 9h-18h), rejeite
-3. Envie mensagem informando o horário de atendimento
-
-### 3. Rejeitar Chamadas de Vídeo
-
-Aceitar apenas chamadas de áudio:
-1. Verifique o campo `isVideo` no evento de chamada
-2. Se for `true`, rejeite a chamada
-3. Envie mensagem pedindo para ligar com chamada de voz
-
----
-
-## Limitações e Observações
-
-### Limitações do WhatsApp
-
-1. **Não é possível aceitar chamadas via API**: A API do WhatsApp Multi-Device não permite aceitar chamadas programaticamente. Você só pode rejeitá-las.
-
-2. **Chamadas em grupos**: Chamadas em grupos também disparam o evento, mas o campo `isGroup` será `true`.
-
-3. **Timing**: A rejeição deve ser feita rapidamente. Se demorar muito, a chamada pode cair antes da rejeição.
-
-### Boas Práticas
-
-1. **Sempre responda ao webhook rapidamente**: Rejeite a chamada em menos de 2 segundos para evitar timeout.
-
-2. **Envie mensagem explicativa**: Após rejeitar, informe o usuário o motivo via mensagem de texto.
-
-3. **Log de chamadas rejeitadas**: Mantenha registro para análise, salvando data/hora, número, ID da chamada e motivo da rejeição.
-
-4. **Tratamento de erros**: Sempre trate possíveis erros na rejeição para evitar que seu webhook trave ao falhar em rejeitar uma chamada.
-
----
-
-## Códigos de Erro Comuns
-
-| Código | Erro | Solução |
-|--------|------|---------|
-| 400 | `invalid request body` | Verifique formato do JSON |
-| 500 | `instance not found` | Instância não conectada |
-| 500 | `error reject call` | Chamada não existe ou já expirou |
-
----
-
-## Estrutura do Evento de Chamada
-
-Quando você recebe um webhook de chamada, a estrutura é:
+Sem `X-Call-Client-ID`, retorna todas as chamadas ativas da instância. Com o
+header, retorna chamadas do cliente e ofertas ainda não assumidas.
 
 ```json
 {
-  "event": "call",
-  "instance": "minha-instancia",
-  "data": {
-    "id": "ABC123XYZ",
-    "from": "5511999999999@s.whatsapp.net",
-    "timestamp": "2025-11-11T10:30:00Z",
-    "isVideo": false,
-    "isGroup": false,
-    "status": "ringing"
-  }
+  "calls":[
+    {
+      "instanceId":"instance-id",
+      "callId":"call-id",
+      "clientId":"operador-123",
+      "direction":"incoming",
+      "status":"connected",
+      "peer":"5511999999999@s.whatsapp.net"
+    }
+  ]
 }
 ```
 
-**Campos**:
-- `id`: ID único da chamada (use como `callId`)
-- `from`: JID de quem está ligando (use como `callCreator`)
-- `timestamp`: Quando a chamada foi iniciada
-- `isVideo`: Se é chamada de vídeo (true) ou áudio (false)
-- `isGroup`: Se é chamada em grupo
-- `status`: Status da chamada (ringing, timeout, reject)
+## Eventos SSE
 
----
+`GET /call/events`
 
-## Configuração de Webhooks
+O stream usa `text/event-stream`. Com `X-Call-Client-ID`, inclui ofertas não
+assumidas e chamadas pertencentes ao cliente. Consumidores que esgotam o buffer
+limitado são desconectados.
 
-Para receber eventos de chamada, configure o webhook:
-
-```env
-WEBHOOK_URL=https://seu-servidor.com/webhook
+```text
+event: call.status
+data: {"type":"call.status","instanceId":"instance-id","callId":"call-id","clientId":"operador-123","direction":"incoming","status":"connected","peer":"5511999999999@s.whatsapp.net","timestamp":"2026-06-27T12:00:00Z"}
 ```
 
-Certifique-se de que seu servidor:
-1. Aceita requisições POST
-2. Responde rapidamente (< 5 segundos)
-3. Retorna status 200 para confirmar recebimento
+Os tipos normalizados são `call.incoming`, `call.status` e `call.ended`. Eles
+também passam pelo mecanismo de webhook/filas quando a instância assina `CALL`.
+Os eventos nativos `CallOffer`, `CallAccept` e `CallTerminate` continuam ativos.
 
----
+## Estados
 
-## Próximos Passos
+- `offered`: chamada recebida sem proprietário;
+- `starting`: sinalização ou mídia em preparação;
+- `ringing`: destino sendo chamado;
+- `connected`: mídia bidirecional ativa;
+- `ending`: término em andamento;
+- `ended`, `rejected` e `failed`: estados terminais.
 
-- [Sistema de Eventos](../recursos-avancados/events-system.md) - Configurar webhooks
-- [API de Mensagens](./api-messages.md) - Enviar mensagem após rejeitar
-- [API de Usuários](./api-user.md) - Gerenciar contatos
-- [Visão Geral da API](./api-overview.md)
+Cada cliente possui no máximo uma chamada não terminal por instância. Mapas,
+claim, transições e limpeza são protegidos para execução concorrente.
 
----
+## Erros
 
-**Documentação gerada para Evolution GO v1.0**
+| Status | Condição |
+|---|---|
+| `400` | JSON inválido ou `X-Call-Client-ID` ausente |
+| `404` | chamada desconhecida ou expirada |
+| `409` | ownership, operador ocupado, transição inválida ou WebRTC não pronto |
+| `422` | número ou SDP inválido |
+| `503` | instância desconectada ou mídia indisponível |
+| `504` | timeout de negociação |
+| `500` | falha inesperada |
+
+## Validação real no servidor
+
+Use duas contas WhatsApp e valide:
+
+1. chamada de saída com áudio nos dois sentidos;
+2. chamada recebida, negociação WebRTC e aceite;
+3. rejeição local e remota;
+4. término local e remoto;
+5. desconexão da instância durante a chamada;
+6. dois operadores tentando assumir a mesma oferta.
+
+Áudio, API keys e SDP não devem ser incluídos em logs de produção.

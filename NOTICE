@@ -16,3 +16,8 @@ This product includes software developed by external contributors:
 
 - whatsmeow (https://github.com/tulir/whatsmeow) by Tulir Asokan, used as the
   WhatsApp protocol library.
+
+- WaCalls (https://github.com/JotaDev66/WaCalls), commit
+  edeb31f0427aba896639db503153b777a405eccf, used for WhatsApp call signaling,
+  relay transport, SRTP/RTP media, PCM conversion, and the MLow codec under the
+  MIT License. The license texts are preserved under internal/wacalls/.
