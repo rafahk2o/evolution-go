@@ -154,3 +154,19 @@ Use duas contas WhatsApp e valide:
 6. dois operadores tentando assumir a mesma oferta.
 
 Áudio, API keys e SDP não devem ser incluídos em logs de produção.
+
+## Widget de teste no Manager
+
+Na página **Instâncias**, cada instância conectada exibe um ícone de telefone na
+barra de ações. O ícone abre um console para:
+
+- iniciar uma chamada informando número com DDI e DDD;
+- receber alerta por badge sem abrir o modal automaticamente;
+- aceitar ou rejeitar uma chamada recebida;
+- silenciar o microfone e encerrar a chamada;
+- acompanhar direção, número remoto, estado e duração.
+
+O widget gera um `X-Call-Client-ID` por navegador, usa a API key da própria
+instância e consome `/call/events` em segundo plano. Para acesso ao microfone fora
+de `localhost`, o Manager precisa ser servido por HTTPS. O navegador deve ter
+permissão de microfone e conectividade ICE com o servidor WebRTC.
