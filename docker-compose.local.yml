@@ -13,7 +13,10 @@ services:
       - evolution_postgres_local:/var/lib/postgresql/data
 
   evolution-go:
-    image: evolution-go-local:chatwoot
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: evolution-go-local:wacalls
     container_name: evolution-go-local
     restart: unless-stopped
     ports:
