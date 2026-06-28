@@ -1,5 +1,8 @@
 # Chatwoot WACalls Temporary Session Design
 
+> **Status:** Superseded by `2026-06-27-chatwoot-wacalls-browser-extension-design.md`.
+> The native Chatwoot broker approach is retained for historical reference only.
+
 ## Goal
 
 Add a native outbound WhatsApp call button to Chatwoot conversations backed by

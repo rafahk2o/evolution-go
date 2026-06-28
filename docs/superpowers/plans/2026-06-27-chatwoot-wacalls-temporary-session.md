@@ -1,5 +1,8 @@
 # Chatwoot WACalls Temporary Session Implementation Plan
 
+> **Status:** Superseded by the Chrome/Edge browser extension design. Do not
+> execute this plan unless the native Chatwoot integration is explicitly revived.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a native outbound WACalls button to Chatwoot while authenticating browser call requests with short-lived, server-issued Evolution tokens instead of instance API keys.
