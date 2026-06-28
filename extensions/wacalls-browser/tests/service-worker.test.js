@@ -44,7 +44,7 @@ function createHarness(options) {
   const defaultResponse = options.fetchResponse || {
     ok: true,
     status: 200,
-    body: { data: { Connected: true, LoggedIn: true, Name: "Suporte" } },
+    body: { data: { Connected: true, LoggedIn: true, InstanceName: "Suporte", Name: "Teste" } },
   };
   const responses = options.fetchResponses || null;
   async function fetchImpl(url, init) {

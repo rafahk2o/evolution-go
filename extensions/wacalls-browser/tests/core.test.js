@@ -25,6 +25,11 @@ test("normalizes and validates international phone numbers", () => {
 });
 
 test("normalizes the real instance status response", () => {
+  assert.deepEqual(core.normalizeInstanceStatus({ data: { Connected: true, LoggedIn: true, InstanceName: "Atendimento", Name: "Teste" } }), {
+    connected: true,
+    loggedIn: true,
+    instanceName: "Atendimento",
+  });
   assert.deepEqual(core.normalizeInstanceStatus({ data: { Connected: true, LoggedIn: true, Name: "Suporte" } }), {
     connected: true,
     loggedIn: true,

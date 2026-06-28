@@ -86,10 +86,11 @@ type ConnectStruct struct {
 }
 
 type StatusStruct struct {
-	Connected bool
-	LoggedIn  bool
-	myJid     *types.JID
-	Name      string
+	Connected    bool
+	LoggedIn     bool
+	myJid        *types.JID
+	Name         string
+	InstanceName string
 }
 
 type QrcodeStruct struct {
@@ -405,10 +406,11 @@ func (i instances) Status(instance *instance_model.Instance) (*StatusStruct, err
 	}
 
 	status := &StatusStruct{
-		Connected: isConnected,
-		LoggedIn:  isLoggedIn,
-		myJid:     myJid,
-		Name:      name,
+		Connected:    isConnected,
+		LoggedIn:     isLoggedIn,
+		myJid:        myJid,
+		Name:         name,
+		InstanceName: instance.Name,
 	}
 
 	return status, nil

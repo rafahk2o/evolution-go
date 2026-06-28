@@ -57,7 +57,7 @@
     return {
       connected: data.Connected === true || data.connected === true,
       loggedIn: data.LoggedIn === true || data.loggedIn === true,
-      instanceName: String(data.Name || data.name || "").trim(),
+      instanceName: String(data.InstanceName || data.instanceName || data.Name || data.name || "").trim(),
     };
   }
 
