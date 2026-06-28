@@ -1,0 +1,10 @@
+{
+  "name": "evolution-go-wacalls-browser",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "validate": "node scripts/validate.mjs",
+    "package": "powershell -ExecutionPolicy Bypass -File scripts/package.ps1"
+  }
+}
