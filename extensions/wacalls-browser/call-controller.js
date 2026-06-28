@@ -22,11 +22,25 @@
       muted: false,
       busy: false,
       error: "",
+      recordingStatus: "inactive",
+      recordingBytes: 0,
+      recordingAvailable: false,
+      recordingFilename: "",
+      recordingError: "",
     };
     var media = null;
     var pollTimer = null;
     var disposed = false;
     var remoteEnded = false;
+    var recording = deps.recordingFactory(function (value) {
+      update({
+        recordingStatus: value.status,
+        recordingBytes: value.bytes,
+        recordingAvailable: value.available,
+        recordingFilename: value.filename,
+        recordingError: value.error,
+      });
+    });
 
     function snapshot() { return Object.assign({}, state); }
     function emit() { if (deps.onState) deps.onState(snapshot()); }
@@ -48,12 +62,18 @@
         var capture = new deps.AudioWorkletNode(context, "wacalls-capture");
         var playback = new deps.AudioWorkletNode(context, "wacalls-playback", { outputChannelCount: [1] });
         var silent = context.createGain();
+        var recordingDestination = context.createMediaStreamDestination();
         silent.gain.value = 0;
         source.connect(capture);
+        source.connect(recordingDestination);
         capture.connect(silent);
         silent.connect(context.destination);
         playback.connect(context.destination);
-        return { stream: stream, context: context, source: source, capture: capture, playback: playback, silent: silent };
+        playback.connect(recordingDestination);
+        return {
+          stream: stream, context: context, source: source, capture: capture,
+          playback: playback, silent: silent, recordingDestination: recordingDestination,
+        };
       } catch (error) {
         stream.getTracks().forEach(function (track) { track.stop(); });
         try { await context.close(); } catch (_) {}
@@ -65,7 +85,7 @@
       if (!audio) return;
       try { audio.capture.port.postMessage({ enabled: false }); } catch (_) {}
       try { audio.stream.getTracks().forEach(function (track) { track.stop(); }); } catch (_) {}
-      [audio.source, audio.capture, audio.playback, audio.silent].forEach(function (node) {
+      [audio.source, audio.capture, audio.playback, audio.silent, audio.recordingDestination].forEach(function (node) {
         try { if (node) node.disconnect(); } catch (_) {}
       });
       try { audio.context.close(); } catch (_) {}
@@ -137,6 +157,11 @@
       });
       await peer.setRemoteDescription({ type: "answer", sdp: answer.sdpAnswer });
       await waitForChannel(channel);
+      recording.start(audio.recordingDestination.stream, state.number);
+    }
+
+    async function finalizeRecording() {
+      try { await recording.stop(); } catch (_) {}
     }
 
     function stopPolling() {
@@ -151,6 +176,7 @@
         var call = result.calls.find(function (item) { return item.callId === state.callId; });
         if (!call) {
           stopPolling();
+          await finalizeRecording();
           cleanupMedia();
           remoteEnded = true;
           update({ phase: "idle", status: "ended", busy: false });
@@ -161,6 +187,7 @@
         update(values);
         if (core.isTerminalStatus(call.status)) {
           stopPolling();
+          await finalizeRecording();
           cleanupMedia();
           remoteEnded = true;
           update({ phase: call.status === "failed" ? "failed" : "idle", busy: false });
@@ -180,6 +207,7 @@
       if (state.busy || (state.callId && !remoteEnded)) throw new Error("Já existe uma chamada em andamento.");
       disposed = false;
       remoteEnded = false;
+      recording.discard();
       update({ phase: "preparing", number: number, callId: "", status: "starting", connectedAt: 0, muted: false, busy: true, error: "" });
       var audio = null;
       try {
@@ -196,6 +224,7 @@
         return snapshot();
       } catch (error) {
         if (audio) disposeAudio(audio);
+        await finalizeRecording();
         cleanupMedia();
         if (state.callId && !remoteEnded) {
           try { await request({ type: protocol.TYPES.CALL_END, callId: state.callId }); } catch (_) {}
@@ -221,12 +250,16 @@
       try {
         if (!remoteEnded) await request({ type: protocol.TYPES.CALL_END, callId: state.callId });
         remoteEnded = true;
+        await finalizeRecording();
+        stopPolling();
+        cleanupMedia();
         update({ phase: "idle", status: "ended", busy: false });
       } catch (error) {
         update({ phase: "failed", busy: false, error: error.message });
         throw error;
       } finally {
         stopPolling();
+        await finalizeRecording();
         cleanupMedia();
       }
       return snapshot();
@@ -240,10 +273,15 @@
         try { await deps.sendMessage({ type: protocol.TYPES.CALL_END, callId: state.callId }); } catch (_) {}
         remoteEnded = true;
       }
+      await finalizeRecording();
       cleanupMedia();
+      recording.discard();
     }
 
-    return { start: start, toggleMute: toggleMute, end: end, dispose: dispose, getState: snapshot };
+    return {
+      start: start, toggleMute: toggleMute, end: end, dispose: dispose,
+      getState: snapshot, getRecording: function () { return recording.getRecording(); },
+    };
   }
 
   return { createController: createController };

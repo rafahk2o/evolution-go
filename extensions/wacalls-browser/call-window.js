@@ -28,10 +28,21 @@
           clearInterval: root.clearInterval.bind(root),
           now: Date.now,
           onState: onState,
+          recordingFactory: function (recordingState) {
+            return root.WaCallsRecording.createRecordingManager({
+              MediaRecorder: root.MediaRecorder,
+              Blob: root.Blob,
+              now: function () { return new Date(); },
+              maxBytes: 250 * 1024 * 1024,
+              onState: recordingState,
+            });
+          },
         });
       },
       setInterval: root.setInterval.bind(root),
       clearInterval: root.clearInterval.bind(root),
+      setTimeout: root.setTimeout.bind(root),
+      urlApi: root.URL,
       now: Date.now,
     });
     app.initialize();
@@ -57,13 +68,17 @@
       apiUrl: element("apiUrl"), apiKey: element("apiKey"), phone: element("phone"),
       instanceName: element("instanceName"), callNumber: element("callNumber"), callStatus: element("callStatus"),
       duration: element("duration"), muteLabel: element("muteLabel"), message: element("message"), save: action("save"), settings: action("settings"),
-      call: action("call"), mute: action("mute"), end: action("end"),
+      recordingIndicator: element("recordingIndicator"), recordingPanel: element("recordingPanel"), recordingSize: element("recordingSize"),
+      call: action("call"), mute: action("mute"), end: action("end"), downloadRecording: action("download-recording"),
     };
     var configured = false;
     var editing = false;
     var config = null;
     var controller = null;
-    var callState = { phase: "idle", number: "", status: "", connectedAt: 0, muted: false, busy: false, error: "" };
+    var callState = {
+      phase: "idle", number: "", status: "", connectedAt: 0, muted: false, busy: false, error: "",
+      recordingStatus: "inactive", recordingBytes: 0, recordingAvailable: false, recordingError: "",
+    };
     var durationTimer = null;
     var bound = false;
 
@@ -84,6 +99,12 @@
       elements.message.classList.toggle("success", !!message && !error);
     }
 
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + " B";
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1).replace(".", ",") + " KB";
+      return (bytes / (1024 * 1024)).toFixed(1).replace(".", ",") + " MB";
+    }
+
     function render() {
       var active = isActive();
       elements.setup.hidden = configured && !editing;
@@ -102,7 +123,11 @@
       elements.callStatus.textContent = statusLabels[callState.status] || statusLabels[callState.phase] || "Preparando";
       elements.duration.textContent = formatDuration();
       elements.muteLabel.textContent = callState.muted ? "Ativar microfone" : "Silenciar";
+      elements.recordingIndicator.hidden = callState.recordingStatus !== "recording" && callState.recordingStatus !== "finalizing";
+      elements.recordingPanel.hidden = !callState.recordingAvailable;
+      elements.recordingSize.textContent = callState.recordingAvailable ? formatBytes(callState.recordingBytes) : "";
       if (callState.error) setMessage(callState.error, true);
+      else if (callState.recordingError) setMessage(callState.recordingError, true);
     }
 
     function ensureController() {
@@ -151,6 +176,23 @@
       catch (error) { setMessage(error.message, true); }
     }
 
+    function downloadRecording() {
+      try {
+        var result = controller && controller.getRecording();
+        if (!result || !result.blob) throw new Error("A gravação não está mais disponível.");
+        var url = deps.urlApi.createObjectURL(result.blob);
+        var link = deps.document.createElement("a");
+        link.href = url;
+        link.download = result.filename;
+        deps.document.body.appendChild(link);
+        link.click();
+        link.remove();
+        deps.setTimeout(function () { deps.urlApi.revokeObjectURL(url); }, 0);
+      } catch (error) {
+        setMessage(error.message || "Não foi possível baixar a gravação.", true);
+      }
+    }
+
     function bind() {
       if (bound) return;
       bound = true;
@@ -158,6 +200,7 @@
       elements.call.addEventListener("click", startCall);
       elements.mute.addEventListener("click", toggleMute);
       elements.end.addEventListener("click", endCall);
+      elements.downloadRecording.addEventListener("click", downloadRecording);
       elements.settings.addEventListener("click", function () { if (!isActive()) { editing = true; render(); } });
       deps.window.addEventListener("pagehide", function () {
         if (controller) return controller.dispose({ endRemote: true });

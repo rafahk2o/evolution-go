@@ -31,6 +31,7 @@ try {
     "call-window.css",
     "call-window.js",
     "call-controller.js",
+    "recording.js",
     "audio-worklet.js",
     "shared/core.js",
     "shared/protocol.js",

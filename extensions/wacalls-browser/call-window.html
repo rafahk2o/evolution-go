@@ -46,12 +46,14 @@
       <button class="button primary call-button" type="button" data-action="call">
         <span aria-hidden="true">☎</span> Ligar
       </button>
+      <p class="recording-notice">As ligações são gravadas automaticamente e processadas somente neste navegador. Avise os participantes conforme a legislação aplicável.</p>
     </section>
 
     <section id="activePanel" class="panel active-call" hidden>
       <div class="call-avatar" aria-hidden="true">☎</div>
       <p id="callNumber" class="call-number"></p>
       <p id="callStatus" class="call-status">Preparando</p>
+      <p id="recordingIndicator" class="recording-indicator" role="status" aria-live="polite" hidden><span aria-hidden="true"></span> Gravando</p>
       <p id="duration" class="duration">00:00</p>
       <div class="call-actions">
         <button class="round-button" type="button" data-action="mute"><span aria-hidden="true">🎙</span><span id="muteLabel">Silenciar</span></button>
@@ -59,10 +61,20 @@
       </div>
     </section>
 
+    <section id="recordingPanel" class="recording-panel" hidden>
+      <div>
+        <strong>Gravação disponível</strong>
+        <span id="recordingSize"></span>
+      </div>
+      <button class="button secondary" type="button" data-action="download-recording">Baixar WebM</button>
+      <p>Se não for baixada, a gravação será descartada ao iniciar outra ligação ou fechar esta janela.</p>
+    </section>
+
     <div id="message" class="message" role="status" aria-live="polite"></div>
   </main>
   <script src="shared/core.js"></script>
   <script src="shared/protocol.js"></script>
+  <script src="recording.js"></script>
   <script src="call-controller.js"></script>
   <script src="call-window.js"></script>
 </body>

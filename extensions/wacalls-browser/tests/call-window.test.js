@@ -16,11 +16,15 @@ test("contains accessible setup, dialer, and active-call controls", () => {
     assert.match(html, new RegExp('<label[^>]+for="' + id + '"'));
     assert.match(html, new RegExp('id="' + id + '"'));
   });
-  ["save", "settings", "call", "mute", "end"].forEach((action) => {
+  ["save", "settings", "call", "mute", "end", "download-recording"].forEach((action) => {
     assert.match(html, new RegExp('data-action="' + action + '"'));
   });
   assert.match(html, /role="status"/);
   assert.match(html, /id="muteLabel"/);
+  assert.match(html, /id="recordingIndicator"/);
+  assert.match(html, /id="recordingPanel"/);
+  assert.match(html, /gravadas automaticamente/i);
+  assert.match(html, /neste navegador/i);
   assert.doesNotMatch(html, /<script[^>]*>\s*[^<\s]/);
 });
 
@@ -40,8 +44,8 @@ function element() {
 
 function createHarness(options) {
   options = options || {};
-  const ids = ["setupPanel", "dialerPanel", "activePanel", "apiUrl", "apiKey", "phone", "instanceName", "callNumber", "callStatus", "duration", "muteLabel", "message"];
-  const actions = ["save", "settings", "call", "mute", "end"];
+  const ids = ["setupPanel", "dialerPanel", "activePanel", "apiUrl", "apiKey", "phone", "instanceName", "callNumber", "callStatus", "duration", "muteLabel", "message", "recordingIndicator", "recordingPanel", "recordingSize"];
+  const actions = ["save", "settings", "call", "mute", "end", "download-recording"];
   const elements = {};
   ids.forEach((id) => { elements[id] = element(); });
   actions.forEach((action) => { elements["action:" + action] = element(); });
@@ -49,6 +53,8 @@ function createHarness(options) {
   const messages = [];
   const permissionRequests = [];
   const controllerCalls = [];
+  const downloads = [];
+  const revokedUrls = [];
   let onControllerState = null;
   const config = options.config || { ok: true, configured: false };
   const chromeApi = {
@@ -65,6 +71,15 @@ function createHarness(options) {
     document: {
       getElementById(id) { return elements[id]; },
       querySelector(selector) { return elements["action:" + selector.match(/data-action="([^"]+)/)[1]]; },
+      createElement(name) {
+        assert.equal(name, "a");
+        return {
+          href: "", download: "",
+          click() { downloads.push({ href: this.href, download: this.download }); },
+          remove() {},
+        };
+      },
+      body: { appendChild() {} },
     },
     window: { addEventListener(type, listener) { windowListeners[type] = listener; } },
     chromeApi,
@@ -77,13 +92,19 @@ function createHarness(options) {
         toggleMute() { controllerCalls.push(["mute"]); return true; },
         async end() { controllerCalls.push(["end"]); },
         async dispose(value) { controllerCalls.push(["dispose", value]); },
+        getRecording() { return options.recording || null; },
       };
     },
     setInterval() { return 1; },
     clearInterval() {},
+    setTimeout(fn) { fn(); return 1; },
+    urlApi: {
+      createObjectURL(blob) { assert.equal(blob, options.recording.blob); return "blob:recording"; },
+      revokeObjectURL(url) { revokedUrls.push(url); },
+    },
     now: () => 61000,
   });
-  return { app, elements, messages, permissionRequests, controllerCalls, windowListeners, emitState(value) { onControllerState(value); } };
+  return { app, elements, messages, permissionRequests, controllerCalls, windowListeners, downloads, revokedUrls, emitState(value) { onControllerState(value); } };
 }
 
 test("shows setup when unconfigured and dialer when configured", async () => {
@@ -145,4 +166,45 @@ test("renders active status, duration, and locks settings", async () => {
   assert.equal(harness.elements.duration.textContent, "01:00");
   assert.equal(harness.elements["action:settings"].disabled, true);
   assert.equal(harness.elements.muteLabel.textContent, "Silenciar");
+});
+
+test("renders automatic recording status and the completed recording", async () => {
+  const harness = createHarness({ config: { ok: true, configured: true, apiUrl: "https://api.example", instanceName: "Suporte" } });
+  await harness.app.initialize();
+  harness.emitState({ phase: "active", recordingStatus: "recording", recordingAvailable: false });
+  assert.equal(harness.elements.recordingIndicator.hidden, false);
+  assert.equal(harness.elements.recordingPanel.hidden, true);
+
+  harness.emitState({ phase: "idle", recordingStatus: "ready", recordingAvailable: true, recordingBytes: 1536 });
+  assert.equal(harness.elements.recordingIndicator.hidden, true);
+  assert.equal(harness.elements.recordingPanel.hidden, false);
+  assert.equal(harness.elements.recordingSize.textContent, "1,5 KB");
+});
+
+test("downloads the completed recording only when requested", async () => {
+  const recording = { blob: new Blob(["audio"]), filename: "wacalls-2026.webm" };
+  const harness = createHarness({
+    config: { ok: true, configured: true, apiUrl: "https://api.example", instanceName: "Suporte" },
+    recording,
+  });
+  await harness.app.initialize();
+  harness.emitState({ phase: "idle", recordingStatus: "ready", recordingAvailable: true, recordingBytes: recording.blob.size });
+  assert.equal(harness.downloads.length, 0);
+  await harness.elements["action:download-recording"].emit("click");
+  assert.deepEqual(harness.downloads, [{ href: "blob:recording", download: "wacalls-2026.webm" }]);
+  assert.deepEqual(harness.revokedUrls, ["blob:recording"]);
+});
+
+test("recording failures warn without disabling call controls and a new call hides old results", async () => {
+  const harness = createHarness({ config: { ok: true, configured: true, apiUrl: "https://api.example", instanceName: "Suporte" } });
+  await harness.app.initialize();
+  harness.emitState({ phase: "active", recordingStatus: "failed", recordingAvailable: false, recordingError: "Falha ao gravar a chamada." });
+  assert.equal(harness.elements.activePanel.hidden, false);
+  assert.equal(harness.elements["action:mute"].disabled, false);
+  assert.equal(harness.elements.message.textContent, "Falha ao gravar a chamada.");
+
+  harness.emitState({ phase: "idle", recordingStatus: "ready", recordingAvailable: true, recordingBytes: 3 });
+  assert.equal(harness.elements.recordingPanel.hidden, false);
+  harness.emitState({ phase: "preparing", recordingStatus: "inactive", recordingAvailable: false, recordingBytes: 0, recordingError: "" });
+  assert.equal(harness.elements.recordingPanel.hidden, true);
 });

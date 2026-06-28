@@ -41,6 +41,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .button:disabled, .icon-button:disabled, .round-button:disabled { opacity: .45; cursor: wait; }
 .primary { background: #00e995; color: #03271a; }
 .primary:hover:not(:disabled) { background: #22f2aa; }
+.secondary { border: 1px solid #34413c; background: #202925; color: #f4f7f6; }
+.secondary:hover:not(:disabled) { background: #29352f; }
 .full { width: 100%; }
 .hint { margin: 13px 0 0; color: #68736f; text-align: center; font-size: 10px; }
 .instance-row { display: flex; align-items: center; justify-content: center; gap: 7px; margin-bottom: 24px; color: #aeb8b4; font-size: 12px; }
@@ -51,6 +53,16 @@ button { -webkit-tap-highlight-color: transparent; }
 .call-avatar { display: grid; place-items: center; width: 74px; height: 74px; margin: 4px auto 17px; border-radius: 50%; background: rgba(0, 233, 149, .13); color: #00e995; font-size: 30px; }
 .call-number { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: .4px; }
 .call-status { margin: 7px 0 0; color: #00e995; font-size: 13px; }
+.recording-indicator { display: inline-flex; align-items: center; gap: 7px; margin: 10px 0 0; color: #ff8d8d; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
+.recording-indicator[hidden] { display: none; }
+.recording-indicator span { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, .5); animation: recording-pulse 1.5s infinite; }
+.recording-notice { margin: 14px 2px 0; color: #75817c; font-size: 10px; line-height: 1.45; text-align: center; }
+.recording-panel { margin-top: 13px; padding: 14px; border: 1px solid #293631; border-radius: 13px; background: #121916; }
+.recording-panel[hidden] { display: none; }
+.recording-panel > div { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 11px; font-size: 12px; }
+.recording-panel > div span { color: #8f9b97; }
+.recording-panel .button { width: 100%; height: 40px; font-size: 12px; }
+.recording-panel p { margin: 10px 2px 0; color: #68736f; font-size: 9px; line-height: 1.4; text-align: center; }
 .duration { margin: 14px 0 26px; color: #9ca6a2; font: 600 22px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .call-actions { display: flex; justify-content: center; gap: 34px; }
 .round-button { display: flex; flex-direction: column; align-items: center; gap: 8px; border: 0; background: transparent; color: #b9c2be; font-size: 11px; cursor: pointer; }
@@ -61,3 +73,4 @@ button { -webkit-tap-highlight-color: transparent; }
 .message.error { border: 1px solid rgba(239, 68, 68, .32); background: rgba(239, 68, 68, .1); color: #fecaca; }
 .message.success { border: 1px solid rgba(0, 233, 149, .25); background: rgba(0, 233, 149, .08); color: #b8ffe6; }
 button:focus-visible { outline: 2px solid #00e995; outline-offset: 2px; }
+@keyframes recording-pulse { 70% { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }

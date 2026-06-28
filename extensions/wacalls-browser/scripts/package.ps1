@@ -32,6 +32,7 @@ try {
     "call-window.css",
     "call-window.js",
     "call-controller.js",
+    "recording.js",
     "audio-worklet.js"
   )
   foreach ($File in $RuntimeFiles) {

@@ -14,7 +14,7 @@ powershell -ExecutionPolicy Bypass -File extensions/wacalls-browser/scripts/pack
 O comando testa e valida a extensão, depois gera:
 
 - `extensions/wacalls-browser/dist/`: pasta pronta para carregar descompactada;
-- `extensions/wacalls-browser/artifacts/evolution-go-wacalls-browser-0.1.0.zip`: pacote opcional.
+- `extensions/wacalls-browser/artifacts/evolution-go-wacalls-browser-0.2.0.zip`: pacote opcional.
 
 ## Instalar no Chrome
 
@@ -39,6 +39,27 @@ selecione **Carregar sem compactação**.
 Durante a chamada, a janela mostra status e duração e permite silenciar o
 microfone ou encerrar. Fechar a janela tenta encerrar a chamada e libera os
 recursos de áudio.
+
+## Gravação local
+
+Todas as ligações são gravadas automaticamente em WebM/Opus, incluindo o áudio
+do microfone e do participante remoto. O áudio permanece somente na memória da
+janela da extensão: não é enviado para a API nem salvo automaticamente em disco.
+
+Ao encerrar a ligação, use **Baixar WebM** se quiser manter o arquivo. Sem o
+download, a gravação é descartada quando outra ligação começa ou quando a janela
+é fechada. Cada gravação é limitada a 250 MB; ao atingir esse limite, ela é
+finalizada e continua disponível para download.
+
+Um indicador vermelho **Gravando** permanece visível durante a captura. MP4 não
+é gerado porque Chrome e Edge não oferecem um caminho confiável para gravar
+áudio MP4 diretamente; a extensão usa WebM/Opus, formato nativo desses
+navegadores. Se a gravação não for suportada ou falhar, a ligação e seus
+controles continuam funcionando normalmente.
+
+Informe os participantes sobre a gravação e observe a legislação aplicável. O
+navegador precisa oferecer suporte a `MediaRecorder` com WebM; versões atuais do
+Chrome e do Microsoft Edge são recomendadas.
 
 ## Requisitos de rede
 

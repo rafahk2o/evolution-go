@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Evolution GO WACalls",
-  "version": "0.1.0",
-  "description": "Chamadas de voz WhatsApp pela Evolution GO.",
+  "version": "0.2.0",
+  "description": "Chamadas de voz WhatsApp com gravação local pela Evolution GO.",
   "permissions": ["storage"],
   "optional_host_permissions": [
     "https://*/*",

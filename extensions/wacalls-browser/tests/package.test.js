@@ -36,3 +36,21 @@ test("manifest remains independent from pages and required hosts", () => {
   assert.equal(manifest.host_permissions, undefined);
   assert.equal(JSON.stringify(manifest).toLowerCase().includes("chatwoot"), false);
 });
+
+test("packager includes the recording runtime", () => {
+  const script = fs.readFileSync(path.join(root, "scripts", "package.ps1"), "utf8");
+  assert.match(script, /"recording\.js"/);
+});
+
+test("validator rejects a runtime tree without the recorder", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "wacalls-extension-"));
+  try {
+    fs.cpSync(root, temporary, { recursive: true, filter(source) { return !source.includes(path.sep + "dist") && !source.includes(path.sep + "artifacts"); } });
+    fs.rmSync(path.join(temporary, "recording.js"));
+    const result = validate(temporary);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr + result.stdout, /recording\.js/i);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});

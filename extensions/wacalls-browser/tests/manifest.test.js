@@ -10,9 +10,11 @@ const root = path.join(__dirname, "..");
 test("declares a minimal standalone MV3 extension", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
   assert.equal(manifest.manifest_version, 3);
+  assert.equal(manifest.version, "0.2.0");
   assert.deepEqual(manifest.background, { service_worker: "service-worker.js" });
   assert.equal(manifest.action.default_popup, undefined);
   assert.deepEqual(manifest.permissions, ["storage"]);
+  assert.equal(manifest.permissions.includes("downloads"), false);
   assert.ok(manifest.optional_host_permissions.includes("https://*/*"));
   assert.ok(manifest.optional_host_permissions.includes("http://localhost/*"));
   assert.ok(manifest.optional_host_permissions.includes("http://127.0.0.1/*"));
@@ -25,4 +27,5 @@ test("references local runtime files", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
   assert.equal(fs.existsSync(path.join(root, manifest.background.service_worker)), true);
   assert.equal(fs.existsSync(path.join(root, "call-window.html")), true);
+  assert.equal(fs.existsSync(path.join(root, "recording.js")), true);
 });
