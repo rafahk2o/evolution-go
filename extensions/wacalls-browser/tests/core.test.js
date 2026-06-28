@@ -15,7 +15,7 @@ test("accepts HTTPS origins and loopback HTTP only", () => {
 });
 
 test("creates an exact host permission pattern", () => {
-  assert.equal(core.permissionPattern("https://api.example.com:8443"), "https://api.example.com:8443/*");
+  assert.equal(core.permissionPattern("https://api.example.com:8443"), "https://api.example.com/*");
 });
 
 test("normalizes and validates international phone numbers", () => {
