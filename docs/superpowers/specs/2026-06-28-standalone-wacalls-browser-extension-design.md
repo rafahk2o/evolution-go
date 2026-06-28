@@ -34,6 +34,7 @@ The extension uses Manifest V3 and contains four isolated units:
    performs an allowlisted set of authenticated Evolution API requests.
 2. A compact extension window owns the user interface, microphone, AudioContext,
    AudioWorklet, RTCPeerConnection, PCM data channel, timers, and call lifecycle.
+   It handles the API key only while the user is submitting configuration.
 3. Pure shared modules normalize and validate URLs, phone numbers, messages,
    call responses, and statuses.
 4. A packaged AudioWorklet converts microphone and playback audio to and from
@@ -58,7 +59,7 @@ The extension requests only:
 - the browser capabilities required to open and focus the extension window.
 
 The configured API URL must use HTTPS. Plain HTTP is accepted only for
-`localhost`, `127.0.0.1`, or `[::1]` development origins. The extension requests
+`localhost` or `127.0.0.1` development origins. The extension requests
 the exact origin permission after an explicit save/test action and does not use
 permanent `<all_urls>` access, content scripts, externally connectable messages,
 or remote JavaScript.
@@ -71,24 +72,27 @@ The configuration model is:
 {
   "apiUrl": "https://evolution.example",
   "apiKey": "instance-secret",
-  "instanceId": "verified-instance-id",
   "instanceName": "verified-instance-name",
   "connected": true,
+  "loggedIn": true,
   "lastVerifiedAt": "2026-06-28T12:00:00Z"
 }
 ```
 
 Saving configuration normalizes the origin, requests permission for that exact
 origin, and calls `GET /instance/status` through the service worker. Only a
-successful response with a usable instance identity is persisted as verified.
-Changing the URL or API key invalidates the previous verification.
+successful response reporting both `Connected` and `LoggedIn` is persisted as
+verified. The optional `Name` value is retained as the display name. Changing
+the URL or API key invalidates the previous verification.
 
-The service worker adds the `apikey` header internally. Responses sent to the
-window omit the API key and full upstream response bodies. The key is not stored
-in synchronized storage, DOM attributes, URL parameters, page storage, logs, or
-runtime messages. A local machine administrator or user inspecting the
-extension's own storage can recover it; protection from the device owner is not
-a security objective.
+The configuration window necessarily sends the API key once in the typed save
+message, then clears the input. The service worker adds the `apikey` header
+internally for verification and all later calls. Responses and non-configuration
+messages omit the API key and full upstream response bodies. The key is not
+stored in synchronized storage, DOM attributes, URL parameters, page storage, or
+logs. A local machine administrator or user inspecting the extension's own
+storage can recover it; protection from the device owner is not a security
+objective.
 
 ## Service Worker API Boundary
 
@@ -230,4 +234,3 @@ performs a real outbound call with bidirectional audio.
   worker's authenticated request path.
 - The worker cannot be used as a general authenticated HTTP proxy.
 - No Chatwoot code, route, cookie, DOM, permission, or server change is used.
-
