@@ -40,6 +40,7 @@ test("manifest remains independent from pages and required hosts", () => {
 test("packager includes the recording runtime", () => {
   const script = fs.readFileSync(path.join(root, "scripts", "package.ps1"), "utf8");
   assert.match(script, /"recording\.js"/);
+  assert.match(script, /"icons"/);
 });
 
 test("validator rejects a runtime tree without the recorder", () => {
@@ -50,6 +51,19 @@ test("validator rejects a runtime tree without the recorder", () => {
     const result = validate(temporary);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr + result.stdout, /recording\.js/i);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test("validator rejects a runtime tree with a missing manifest icon", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "wacalls-extension-"));
+  try {
+    fs.cpSync(root, temporary, { recursive: true, filter(source) { return !source.includes(path.sep + "dist") && !source.includes(path.sep + "artifacts"); } });
+    fs.rmSync(path.join(temporary, "icons", "icon-128.png"));
+    const result = validate(temporary);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr + result.stdout, /icon-128\.png/i);
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }

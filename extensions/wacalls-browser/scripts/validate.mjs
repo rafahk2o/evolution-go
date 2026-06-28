@@ -23,6 +23,15 @@ try {
   if (manifest.host_permissions) fail("Required host permissions are forbidden.");
   if (JSON.stringify(manifest.permissions || []) !== JSON.stringify(["storage"])) fail("Only storage may be a required permission.");
   if (!manifest.background || manifest.background.service_worker !== "service-worker.js") fail("Classic service worker is required.");
+  const expectedIcons = ["16", "32", "48", "128"];
+  for (const size of expectedIcons) {
+    const manifestIcon = manifest.icons && manifest.icons[size];
+    const actionIcon = manifest.action && manifest.action.default_icon && manifest.action.default_icon[size];
+    if (!manifestIcon || manifestIcon !== actionIcon) fail(`Missing matching ${size}px extension icon.`);
+    if (path.extname(manifestIcon).toLowerCase() !== ".png") fail(`Extension icon must be PNG: ${manifestIcon}`);
+    const target = path.join(root, manifestIcon);
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) fail(`Missing runtime file: ${manifestIcon}`);
+  }
 
   const runtime = new Set([
     "manifest.json",

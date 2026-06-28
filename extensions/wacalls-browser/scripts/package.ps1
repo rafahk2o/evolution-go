@@ -40,6 +40,7 @@ try {
   }
   Copy-Item -LiteralPath (Join-Path $Root "shared/core.js") -Destination (Join-Path $Dist "shared/core.js")
   Copy-Item -LiteralPath (Join-Path $Root "shared/protocol.js") -Destination (Join-Path $Dist "shared/protocol.js")
+  Copy-Item -LiteralPath (Join-Path $Root "icons") -Destination (Join-Path $Dist "icons") -Recurse
 
   $Manifest = Get-Content -Raw -LiteralPath (Join-Path $Root "manifest.json") | ConvertFrom-Json
   $Zip = Join-Path $Artifacts ("evolution-go-wacalls-browser-{0}.zip" -f $Manifest.version)
