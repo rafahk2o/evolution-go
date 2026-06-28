@@ -27,6 +27,19 @@ test("call and Chatwoot injectors select exact instance cards", () => {
   assert.doesNotMatch(chatwoot, /text\.indexOf\(instance\.name\)/);
 });
 
+test("instance action bars reserve enough width for the disconnect label", () => {
+  const calls = source();
+  const chatwoot = fs.readFileSync(path.join(__dirname, "chatwoot-connector.js"), "utf8");
+
+  [calls, chatwoot].forEach((script) => {
+    assert.match(script, /flex:1 1 116px!important/);
+    assert.match(script, /min-width:116px!important/);
+    assert.match(script, /white-space:nowrap!important/);
+    assert.match(script, /text-overflow:ellipsis!important/);
+    assert.match(script, /flex:0 0 38px!important/);
+  });
+});
+
 test("authenticates call ownership and streams SSE through fetch", () => {
   const script = source();
   assert.match(script, /X-Call-Client-ID/);
