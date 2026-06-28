@@ -369,6 +369,18 @@ func (s *callService) HandleWhatsAppEvent(instance *instance_model.Instance, cli
 	}
 	runtime := s.runtime(instance.Id, callID)
 	if runtime != nil {
+		if _, accepted := event.(*events.CallAccept); accepted {
+			current, err := s.registry.get(instance.Id, callID)
+			if err == nil && current.Direction == DirectionIncoming && current.Status == StatusOffered {
+				updated, changed, transitionErr := s.registry.transition(instance.Id, callID, StatusStarting)
+				if transitionErr == nil {
+					runtime.stopOfferTimer()
+					if changed {
+						s.publish(instance, EventStatus, updated)
+					}
+				}
+			}
+		}
 		runtime.engine.HandleEvent(context.Background(), event)
 	}
 }

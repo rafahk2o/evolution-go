@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	instance_model "github.com/EvolutionAPI/evolution-go/pkg/instance/model"
 	"go.mau.fi/whatsmeow"
@@ -153,5 +154,33 @@ func TestDisconnectedCleansEveryInstanceCall(t *testing.T) {
 	}
 	if !bridge.closed {
 		t.Fatal("bridge was not closed")
+	}
+}
+
+func TestCallAcceptedOnAnotherDeviceDoesNotExpireIncomingOffer(t *testing.T) {
+	engine := &fakeCallEngine{}
+	svc := newCallService(callServiceOptions{
+		engineFactory: func(*whatsmeow.Client) callEngine { return engine },
+		offerTimeout:  20 * time.Millisecond,
+	})
+	instance := &instance_model.Instance{Id: "instance"}
+	svc.HandleWhatsAppEvent(instance, nil, incomingEvent("call"))
+
+	peer := types.NewJID("5511888888888", types.DefaultUserServer)
+	svc.HandleWhatsAppEvent(instance, nil, &events.CallAccept{
+		BasicCallMeta: types.BasicCallMeta{From: peer, CallID: "call"},
+		Data:          &waBinary.Node{Tag: "accept", Attrs: waBinary.Attrs{"call-id": "call"}},
+	})
+
+	time.Sleep(60 * time.Millisecond)
+	calls := svc.Active("instance", "")
+	if len(calls) != 1 || calls[0].Status != StatusStarting {
+		t.Fatalf("accepted call expired: %+v", calls)
+	}
+	engine.mu.Lock()
+	rejected := engine.rejected
+	engine.mu.Unlock()
+	if rejected != 0 {
+		t.Fatalf("accepted call was rejected by offer timeout: rejected=%d", rejected)
 	}
 }
