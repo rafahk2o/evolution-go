@@ -1,6 +1,12 @@
 (function () {
   "use strict";
 
+  var cardCore = window.WaCallsWidgetCore;
+  if (!cardCore) {
+    console.warn("[Chatwoot connector] card matching core unavailable.");
+    return;
+  }
+
   var state = {
     instances: [],
     loading: false,
@@ -126,7 +132,7 @@
       if (rect.width < 180 || rect.height < 120) return false;
       if (rect.width > 640 || rect.height > 520) return false;
       var text = node.innerText || "";
-      return text.indexOf(instance.name) !== -1 && text.indexOf("Status") !== -1;
+      return cardCore.matchesInstanceName(text, instance.name) && text.indexOf("Status") !== -1;
     });
     matches.sort(function (a, b) {
       var ar = a.getBoundingClientRect();

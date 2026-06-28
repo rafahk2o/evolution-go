@@ -10,6 +10,12 @@ test("normalizes a WhatsApp destination", () => {
   assert.equal(core.normalizeNumber("abc"), "");
 });
 
+test("matches an instance name exactly instead of matching name prefixes", () => {
+  assert.equal(core.matchesInstanceName("teste\nteste\nDesconectado\nStatus\nclose", "teste"), true);
+  assert.equal(core.matchesInstanceName("teste2\nteste2\nDesconectado\nStatus\nclose", "teste"), false);
+  assert.equal(core.matchesInstanceName("teste2\nteste2\nDesconectado\nStatus\nclose", "teste2"), true);
+});
+
 test("identifies every terminal call state", () => {
   assert.equal(core.isTerminalStatus("ended"), true);
   assert.equal(core.isTerminalStatus("rejected"), true);
@@ -59,4 +65,3 @@ test("parses SSE events split across arbitrary chunks", () => {
     },
   ]);
 });
-

@@ -17,6 +17,16 @@ test("injects one identifiable call button per instance card", () => {
   assert.match(script, /Chamada recebida/);
 });
 
+test("call and Chatwoot injectors select exact instance cards", () => {
+  const calls = source();
+  const chatwoot = fs.readFileSync(path.join(__dirname, "chatwoot-connector.js"), "utf8");
+
+  assert.match(calls, /core\.matchesInstanceName\(text, instance\.name\)/);
+  assert.match(chatwoot, /cardCore\.matchesInstanceName\(text, instance\.name\)/);
+  assert.doesNotMatch(calls, /text\.indexOf\(instance\.name\)/);
+  assert.doesNotMatch(chatwoot, /text\.indexOf\(instance\.name\)/);
+});
+
 test("authenticates call ownership and streams SSE through fetch", () => {
   const script = source();
   assert.match(script, /X-Call-Client-ID/);

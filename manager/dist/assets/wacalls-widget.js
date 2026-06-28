@@ -164,7 +164,7 @@
       var rectangle = node.getBoundingClientRect();
       if (rectangle.width < 180 || rectangle.height < 120 || rectangle.width > 680 || rectangle.height > 540) return false;
       var text = node.innerText || "";
-      return text.indexOf(instance.name) !== -1 && text.indexOf("Status") !== -1;
+      return core.matchesInstanceName(text, instance.name) && text.indexOf("Status") !== -1;
     });
     matches.sort(function (left, right) {
       var a = left.getBoundingClientRect();

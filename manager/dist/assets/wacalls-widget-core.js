@@ -29,6 +29,14 @@
     return String(value == null ? "" : value).replace(/\D/g, "");
   }
 
+  function matchesInstanceName(text, instanceName) {
+    var expected = String(instanceName == null ? "" : instanceName).trim();
+    if (!expected) return false;
+    return String(text == null ? "" : text).split(/\r?\n/).some(function (line) {
+      return line.trim() === expected;
+    });
+  }
+
   function isTerminalStatus(status) {
     return !!terminalStatuses[String(status || "").toLowerCase()];
   }
@@ -101,6 +109,7 @@
 
   return {
     normalizeNumber: normalizeNumber,
+    matchesInstanceName: matchesInstanceName,
     isTerminalStatus: isTerminalStatus,
     callErrorMessage: callErrorMessage,
     normalizeCall: normalizeCall,
