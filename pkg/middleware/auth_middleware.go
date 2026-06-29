@@ -1,12 +1,16 @@
 package auth_middleware
 
 import (
+	"errors"
+	"log"
 	"net/http"
+	"strings"
 
 	company_service "github.com/EvolutionAPI/evolution-go/pkg/company/service"
 	"github.com/EvolutionAPI/evolution-go/pkg/config"
 	instance_service "github.com/EvolutionAPI/evolution-go/pkg/instance/service"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Middleware interface {
@@ -41,23 +45,24 @@ func (m middleware) Auth(ctx *gin.Context) {
 }
 
 func (m middleware) AuthAdmin(ctx *gin.Context) {
-	token := ctx.GetHeader("apikey")
+	token := strings.TrimSpace(ctx.GetHeader("apikey"))
 	if token == "" {
 		ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized"})
 		return
 	}
 
-	if token == m.config.GlobalApiKey {
-		if companyID := ctx.GetHeader("X-Company-Id"); companyID != "" {
+	if token == strings.TrimSpace(m.config.GlobalApiKey) {
+		if companyID := strings.TrimSpace(ctx.GetHeader("X-Company-Id")); companyID != "" {
 			ctx.Set("companyId", companyID)
 			ctx.Set("isMaster", true)
 			ctx.Next()
 			return
 		}
 
-		company, err := m.companyService.EnsureDefaultCompany(token)
+		company, err := m.companyService.GetDefaultCompany()
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized"})
+			log.Printf("default company authentication lookup failed: %v", err)
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 			return
 		}
 
@@ -70,7 +75,12 @@ func (m middleware) AuthAdmin(ctx *gin.Context) {
 
 	company, err := m.companyService.AuthenticateAPIKey(token)
 	if err != nil {
-		ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized"})
+			return
+		}
+		log.Printf("company API key authentication lookup failed: %v", err)
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
@@ -81,13 +91,13 @@ func (m middleware) AuthAdmin(ctx *gin.Context) {
 }
 
 func (m middleware) AuthMaster(ctx *gin.Context) {
-	token := ctx.GetHeader("apikey")
+	token := strings.TrimSpace(ctx.GetHeader("apikey"))
 	if token == "" {
 		ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized"})
 		return
 	}
 
-	if token != m.config.GlobalApiKey {
+	if token != strings.TrimSpace(m.config.GlobalApiKey) {
 		ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized"})
 		return
 	}
