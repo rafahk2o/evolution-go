@@ -19,6 +19,7 @@
 - `pkg/middleware/auth_middleware_test.go`: backend regression coverage.
 - `manager/dist/assets/index-Dx4-byTC.js`: normalize Manager login values.
 - `manager/dist/assets/auth-session.test.js`: bundle regression coverage.
+- `manager/patch-auth-session.js`: deterministic, idempotent patcher for the persisted minified bundle.
 
 ### Task 1: Read-Only Default Company Lookup
 
@@ -331,6 +332,7 @@ git commit -m "fix: normalize manager api key authentication"
 **Files:**
 - Modify: `manager/dist/assets/auth-session.test.js`
 - Modify: `manager/dist/assets/index-Dx4-byTC.js`
+- Create: `manager/patch-auth-session.js`
 
 - [ ] **Step 1: Add failing bundle tests**
 

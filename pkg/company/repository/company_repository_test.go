@@ -72,3 +72,31 @@ func TestBackfillInstancesDoesNotCompareUUIDWithEmptyString(t *testing.T) {
 		t.Fatalf("UUID column must not be compared with an empty string, got SQL: %s", statement)
 	}
 }
+
+func TestGetDefaultCompanyUsesReadOnlyActiveDefaultLookup(t *testing.T) {
+	capture := &queryCaptureLogger{}
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		Conn:             dryRunConnPool{},
+		WithoutReturning: true,
+	}), &gorm.Config{
+		DryRun:               true,
+		DisableAutomaticPing: true,
+		Logger:               capture,
+	})
+	if err != nil {
+		t.Fatalf("create dry-run database: %v", err)
+	}
+
+	repository := NewCompanyRepository(db)
+	_, _ = repository.GetDefaultCompany()
+	statement := strings.Join(capture.statements, "\n")
+	if !strings.Contains(statement, `name = 'default'`) {
+		t.Fatalf("expected default company filter, got SQL: %s", statement)
+	}
+	if !strings.Contains(statement, `active = true`) {
+		t.Fatalf("expected active company filter, got SQL: %s", statement)
+	}
+	if strings.Contains(strings.ToUpper(statement), "UPDATE") {
+		t.Fatalf("default lookup must be read-only, got SQL: %s", statement)
+	}
+}
