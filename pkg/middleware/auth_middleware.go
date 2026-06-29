@@ -54,6 +54,18 @@ func (m middleware) AuthAdmin(ctx *gin.Context) {
 			ctx.Next()
 			return
 		}
+
+		company, err := m.companyService.EnsureDefaultCompany(token)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized"})
+			return
+		}
+
+		ctx.Set("company", company)
+		ctx.Set("companyId", company.Id)
+		ctx.Set("isMaster", true)
+		ctx.Next()
+		return
 	}
 
 	company, err := m.companyService.AuthenticateAPIKey(token)
