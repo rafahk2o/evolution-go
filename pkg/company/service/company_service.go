@@ -14,6 +14,7 @@ type CompanyService interface {
 	Create(data *CreateStruct) (*CreateResult, error)
 	GetAll() ([]*company_model.Company, error)
 	AuthenticateAPIKey(apiKey string) (*company_model.Company, error)
+	GetDefaultCompany() (*company_model.Company, error)
 	Delete(id string) error
 	EnsureDefaultCompany(apiKey string) (*company_model.Company, error)
 	BackfillInstances(companyID string) error
@@ -69,6 +70,10 @@ func (c *companies) AuthenticateAPIKey(apiKey string) (*company_model.Company, e
 		return nil, fmt.Errorf("api key is required")
 	}
 	return c.companyRepository.GetByAPIKey(apiKey)
+}
+
+func (c *companies) GetDefaultCompany() (*company_model.Company, error) {
+	return c.companyRepository.GetDefaultCompany()
 }
 
 func (c *companies) Delete(id string) error {

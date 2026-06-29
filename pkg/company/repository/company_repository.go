@@ -17,6 +17,7 @@ type CompanyRepository interface {
 	Create(name string, apiKey string) (*company_model.Company, error)
 	GetAll() ([]*company_model.Company, error)
 	GetByAPIKey(apiKey string) (*company_model.Company, error)
+	GetDefaultCompany() (*company_model.Company, error)
 	GetByID(id string) (*company_model.Company, error)
 	CountInstances(companyID string) (int64, error)
 	Delete(id string) error
@@ -59,6 +60,15 @@ func (r *companyRepository) GetByAPIKey(apiKey string) (*company_model.Company, 
 	var company company_model.Company
 	err := r.db.Where("api_key_hash = ? AND active = ?", HashAPIKey(apiKey), true).First(&company).Error
 	if err != nil {
+		return nil, err
+	}
+	return &company, nil
+}
+
+func (r *companyRepository) GetDefaultCompany() (*company_model.Company, error) {
+	var company company_model.Company
+	if err := r.db.Where("name = ? AND active = ?", DefaultCompanyName, true).
+		First(&company).Error; err != nil {
 		return nil, err
 	}
 	return &company, nil
