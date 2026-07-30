@@ -3,6 +3,7 @@ module github.com/EvolutionAPI/evolution-go
 go 1.25.0
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/chai2010/webp v1.1.1
 	github.com/gabriel-vasile/mimetype v1.4.5
 	github.com/gin-gonic/gin v1.10.0
@@ -16,16 +17,16 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pion/webrtc/v4 v4.2.15
 	github.com/rabbitmq/amqp091-go v1.10.0
-	github.com/rs/zerolog v1.34.0
+	github.com/rs/zerolog v1.35.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.3
 	github.com/vincent-petithory/dataurl v1.0.0
-	go.mau.fi/whatsmeow v0.0.0-00010101000000-000000000000
-	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a
+	go.mau.fi/whatsmeow v0.0.0-20260630180629-b572e5bcb92b
+	golang.org/x/exp v0.0.0-20260611194520-c48552f49976
 	golang.org/x/image v0.0.0-20211028202545-6944b10bf410
-	golang.org/x/net v0.50.0
+	golang.org/x/net v0.56.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gorm.io/driver/postgres v1.5.9
@@ -34,14 +35,14 @@ require (
 )
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/beeper/argo-go v1.1.2 // indirect
 	github.com/bytedance/sonic v1.12.2 // indirect
 	github.com/bytedance/sonic/loader v0.2.0 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
-	github.com/coder/websocket v1.8.14 // indirect
+	github.com/coder/websocket v1.8.15 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/elliotchance/orderedmap/v3 v3.1.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
@@ -76,7 +77,7 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
-	github.com/petermattis/goid v0.0.0-20260113132338-7c7de50cc741 // indirect
+	github.com/petermattis/goid v0.0.0-20260330135022-df67b199bc81 // indirect
 	github.com/pion/datachannel v1.6.0 // indirect
 	github.com/pion/dtls/v3 v3.1.4 // indirect
 	github.com/pion/ice/v4 v4.2.7 // indirect
@@ -99,15 +100,15 @@ require (
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.27 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	go.mau.fi/libsignal v0.2.1 // indirect
-	go.mau.fi/util v0.9.6 // indirect
+	go.mau.fi/libsignal v0.2.2 // indirect
+	go.mau.fi/util v0.9.10 // indirect
 	golang.org/x/arch v0.10.0 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	golang.org/x/tools v0.42.0 // indirect
+	golang.org/x/tools v0.46.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
 	modernc.org/libc v1.55.3 // indirect
@@ -116,5 +117,3 @@ require (
 	modernc.org/strutil v1.2.0 // indirect
 	modernc.org/token v1.1.0 // indirect
 )
-
-replace go.mau.fi/whatsmeow => ./whatsmeow-lib

@@ -3,6 +3,7 @@ package instance_service
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -94,8 +95,15 @@ type StatusStruct struct {
 }
 
 type QrcodeStruct struct {
-	Qrcode string
-	Code   string
+	Qrcode string `json:"qrcode"`
+	Code   string `json:"code"`
+	// Passkey ceremony fields. Populated when the account requires a WebAuthn
+	// passkey to finish linking (no QR to scan at that point). The manager uses
+	// PasskeyStage to switch its UI and PasskeyOpenUrl for the
+	// "Abrir WhatsApp Web" button that launches the passkey ceremony.
+	PasskeyStage   string `json:"passkeyStage,omitempty"`
+	PasskeyOpenURL string `json:"passkeyOpenUrl,omitempty"`
+	PasskeyCode    string `json:"passkeyCode,omitempty"`
 }
 
 const (
@@ -399,9 +407,13 @@ func (i instances) Logout(instance *instance_model.Instance) (*instance_model.In
 }
 
 func (i instances) Status(instance *instance_model.Instance) (*StatusStruct, error) {
-	client, err := i.ensureClientConnected(instance.Id)
-	if err != nil {
-		return nil, err
+	client := i.clientPointer[instance.Id]
+
+	if client == nil {
+		return &StatusStruct{
+			Connected: false,
+			LoggedIn:  false,
+		}, nil
 	}
 
 	isConnected := client.IsConnected()
@@ -432,6 +444,15 @@ func (i instances) GetQr(instance *instance_model.Instance) (*QrcodeStruct, erro
 	if client != nil && client.IsLoggedIn() {
 		logger.LogInfo("[%s] Client is already logged in, no QR code needed", instance.Id)
 		return nil, fmt.Errorf("session already logged in")
+	}
+
+	// Cerimônia de passkey em andamento: não existe QR code para escanear e o
+	// cliente NÃO pode ser reiniciado nem ter a sessão descartada, senão a
+	// cerimônia em voo é perdida. Precisa ser verificado antes de qualquer
+	// restart porque durante a cerimônia o campo Qrcode fica vazio.
+	if passkey := i.passkeyCeremony(instance.Id); passkey != nil {
+		logger.LogInfo("[%s] Passkey ceremony active (stage=%s) — returning passkey info instead of QR", instance.Id, passkey.PasskeyStage)
+		return passkey, nil
 	}
 
 	current, err := i.instanceRepository.GetInstanceByID(instance.Id)
@@ -495,6 +516,27 @@ func (i instances) GetQr(instance *instance_model.Instance) (*QrcodeStruct, erro
 	return qr, nil
 }
 
+// passkeyCeremony devolve os dados da cerimônia de passkey em andamento para a
+// instância, ou nil quando não há cerimônia ativa. O manager usa PasskeyStage
+// para trocar a UI e PasskeyOpenURL no botão "Abrir WhatsApp Web".
+func (i instances) passkeyCeremony(instanceId string) *QrcodeStruct {
+	store := i.whatsmeowService.PasskeyCeremonyStore()
+	if store == nil {
+		return nil
+	}
+
+	token, state, ok := store.StateByInstance(instanceId)
+	if !ok {
+		return nil
+	}
+
+	return &QrcodeStruct{
+		PasskeyStage:   state.Stage,
+		PasskeyCode:    state.Code,
+		PasskeyOpenURL: buildPasskeyOpenURL(token),
+	}
+}
+
 // waitForLogin aguarda o cliente da instância concluir o login, retornando false
 // se isso não acontecer dentro do tempo informado
 func (i instances) waitForLogin(instanceId string, timeout time.Duration) bool {
@@ -526,6 +568,11 @@ func (i instances) waitForQrcode(instanceId string, timeout time.Duration) (*Qrc
 
 		if qr != nil {
 			return qr, nil
+		}
+
+		// A cerimônia de passkey substitui o QR code no meio do pareamento
+		if passkey := i.passkeyCeremony(instanceId); passkey != nil {
+			return passkey, nil
 		}
 
 		if client := i.clientPointer[instanceId]; client != nil && client.IsLoggedIn() {
@@ -563,10 +610,50 @@ func (i instances) readQrcode(instanceId string) (*QrcodeStruct, error) {
 	}, nil
 }
 
+// buildPasskeyOpenURL builds the URL the manager opens to start the passkey
+// ceremony: https://web.whatsapp.com/#wapk=<base64url({t:token,b:publicBase})>.
+// publicBase must be the PUBLICLY reachable API base the browser can hit; set it
+// via PASSKEY_PUBLIC_URL. Kept in sync with the event handler in whatsmeow.go.
+func buildPasskeyOpenURL(token string) string {
+	publicBase := os.Getenv("PASSKEY_PUBLIC_URL")
+	if publicBase == "" {
+		publicBase = "<SET_PASSKEY_PUBLIC_URL>"
+	}
+	payload := fmt.Sprintf(`{"t":%q,"b":%q}`, token, publicBase)
+	wapk := base64.RawURLEncoding.EncodeToString([]byte(payload))
+	return "https://web.whatsapp.com/#wapk=" + wapk
+}
+
 func (i instances) Pair(data *PairStruct, instance *instance_model.Instance) (*PairReturnStruct, error) {
-	code, err := i.clientPointer[instance.Id].PairPhone(context.Background(), data.Phone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
+	logger := i.loggerWrapper.GetLogger(instance.Id)
+	client := i.clientPointer[instance.Id]
+
+	if client == nil || !client.IsConnected() {
+		if client != nil && client.IsLoggedIn() {
+			return nil, fmt.Errorf("instance is already authenticated")
+		}
+		logger.LogInfo("[%s] No active connection, starting instance for phone pairing", instance.Id)
+		if err := i.whatsmeowService.StartInstance(instance.Id); err != nil {
+			logger.LogError("[%s] Failed to start instance for pairing: %v", instance.Id, err)
+			return nil, fmt.Errorf("failed to start instance: %w", err)
+		}
+		// Wait for the WA websocket connection and initial QR generation to establish.
+		// PairPhone must be called after the QR event is received per whatsmeow docs.
+		time.Sleep(3 * time.Second)
+		client = i.clientPointer[instance.Id]
+		if client == nil {
+			return nil, fmt.Errorf("failed to initialize client for pairing")
+		}
+	}
+
+	if client.IsLoggedIn() {
+		return nil, fmt.Errorf("instance is already authenticated")
+	}
+
+	code, err := client.PairPhone(context.Background(), data.Phone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
 	if err != nil {
-		i.loggerWrapper.GetLogger(instance.Id).LogError("[%s] something went wrong calling pair phone", instance.Id)
+		logger.LogError("[%s] PairPhone failed: %v", instance.Id, err)
+		return nil, fmt.Errorf("pairing failed: %w", err)
 	}
 
 	return &PairReturnStruct{PairingCode: code}, nil

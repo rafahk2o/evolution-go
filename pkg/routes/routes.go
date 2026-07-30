@@ -166,6 +166,7 @@ func (r *Routes) AssignRoutes(eng *gin.Engine) {
 			routes.POST("/react", r.jidValidationMiddleware.ValidateJIDFields("number"), r.messageHandler.React)
 			routes.POST("/presence", r.jidValidationMiddleware.ValidateNumberField(), r.messageHandler.ChatPresence)
 			routes.POST("/markread", r.jidValidationMiddleware.ValidateNumberField(), r.messageHandler.MarkRead)
+			routes.POST("/markplayed", r.jidValidationMiddleware.ValidateNumberField(), r.messageHandler.MarkPlayed)
 			routes.POST("/downloadmedia", r.messageHandler.DownloadMedia)
 			routes.POST("/status", r.messageHandler.GetMessageStatus)
 			routes.POST("/delete", r.jidValidationMiddleware.ValidateNumberField(), r.messageHandler.DeleteMessageEveryone)
@@ -200,6 +201,7 @@ func (r *Routes) AssignRoutes(eng *gin.Engine) {
 			routes.GET("/myall", r.groupHandler.GetMyGroups) // TODO: not working
 			routes.POST("/join", r.groupHandler.JoinGroupLink)
 			routes.POST("/leave", r.jidValidationMiddleware.ValidateNumberField(), r.groupHandler.LeaveGroup)
+			routes.POST("/settings", r.jidValidationMiddleware.ValidateNumberField(), r.groupHandler.UpdateGroupSettings)
 		}
 	}
 	routes = eng.Group("/call")

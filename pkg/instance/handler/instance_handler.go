@@ -375,7 +375,7 @@ func (i *instanceHandler) All(ctx *gin.Context) {
 // @Success 200 {object} gin.H "Instance"
 // @Failure 400 {object} gin.H "Error on validation"
 // @Failure 500 {object} gin.H "Internal server error"
-// @Router /instance/get/{instanceId} [get]
+// @Router /instance/info/{instanceId} [get]
 func (i *instanceHandler) Info(ctx *gin.Context) {
 	instanceId := ctx.Param("instanceId")
 
@@ -584,6 +584,20 @@ type GetLogsQuery struct {
 	Limit     int    `form:"limit"`
 }
 
+// GetLogs returns the log entries for an instance
+// @Summary Get instance logs
+// @Description Returns log entries for an instance, filterable by date range, level and limit
+// @Tags Instance
+// @Produce json
+// @Param instanceId path string true "Instance Id"
+// @Param start_date query string false "Start date (YYYY-MM-DD, defaults to 7 days ago)"
+// @Param end_date query string false "End date (YYYY-MM-DD, defaults to now)"
+// @Param level query string false "Log level filter"
+// @Param limit query int false "Max number of entries"
+// @Success 200 {object} gin.H "Logs"
+// @Failure 400 {object} gin.H "Error on validation"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /instance/logs/{instanceId} [get]
 func (h *instanceHandler) GetLogs(c *gin.Context) {
 	instanceId := c.Param("instanceId")
 
