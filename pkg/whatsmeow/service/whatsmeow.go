@@ -712,7 +712,19 @@ func (w whatsmeowService) StartClient(cd *ClientData) {
 					w.loggerWrapper.GetLogger(cd.Instance.Id).LogWarn("[%s] QR timeout killing channel", cd.Instance.Id)
 					delete(w.clientPointer, cd.Instance.Id)
 					delete(w.myClientPointer, cd.Instance.Id)
-					w.killChannel[cd.Instance.Id] <- true
+
+					// O leitor do killChannel só roda depois deste loop, então um envio
+					// bloqueante travaria este goroutine e deixaria a conexão órfã viva,
+					// impedindo a geração de novos QR codes.
+					if killChan, exists := w.killChannel[cd.Instance.Id]; exists {
+						select {
+						case killChan <- true:
+						default:
+						}
+						delete(w.killChannel, cd.Instance.Id)
+					}
+
+					client.Disconnect()
 
 					postMap := make(map[string]interface{})
 
@@ -743,6 +755,10 @@ func (w whatsmeowService) StartClient(cd *ClientData) {
 					if mycli.config.AmqpGlobalEnabled || mycli.config.NatsGlobalEnabled {
 						go mycli.service.SendToGlobalQueues(postMap["event"].(string), values, mycli.userID)
 					}
+
+					// Os recursos já foram liberados acima, não há mais nada para
+					// aguardar neste goroutine
+					return
 				} else if evt.Event == "success" {
 					w.loggerWrapper.GetLogger(cd.Instance.Id).LogInfo("[%s] QR pairing ok!", cd.Instance.Id)
 				} else {
