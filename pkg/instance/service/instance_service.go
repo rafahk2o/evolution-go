@@ -100,7 +100,9 @@ type QrcodeStruct struct {
 
 const (
 	// Tempo máximo de espera pelo primeiro QR code depois de iniciar o cliente
-	qrcodeWaitTimeout = 20 * time.Second
+	qrcodeWaitTimeout = 15 * time.Second
+	// Tempo de espera pelo login automático antes de descartar uma sessão salva
+	qrcodeLoginGrace = 8 * time.Second
 	// Intervalo entre as consultas do QR code no banco
 	qrcodePollInterval = 250 * time.Millisecond
 )
@@ -432,21 +434,15 @@ func (i instances) GetQr(instance *instance_model.Instance) (*QrcodeStruct, erro
 		return nil, fmt.Errorf("session already logged in")
 	}
 
+	current, err := i.instanceRepository.GetInstanceByID(instance.Id)
+	if err != nil {
+		return nil, err
+	}
+
 	// Um cliente aguardando pareamento fica conectado ao WhatsApp, apenas sem login.
-	// Se ele existe mas não está conectado, o fluxo de QR code morreu e o cliente
+	// Se ele não existe ou não está conectado, o fluxo de QR code morreu e o cliente
 	// precisa ser recriado, caso contrário nenhum QR code novo será gerado.
-	clientIsAlive := client != nil && client.IsConnected()
-
-	if clientIsAlive {
-		qr, err := i.readQrcode(instance.Id)
-		if err != nil {
-			return nil, err
-		}
-
-		if qr != nil {
-			return qr, nil
-		}
-	} else {
+	if client == nil || !client.IsConnected() {
 		if client == nil {
 			logger.LogInfo("[%s] No client found, starting new instance for QR code", instance.Id)
 		} else {
@@ -464,20 +460,66 @@ func (i instances) GetQr(instance *instance_model.Instance) (*QrcodeStruct, erro
 		}
 	}
 
+	// Com um JID gravado, o cliente tenta restaurar a sessão e nunca abre o canal
+	// de QR code. Damos uma janela para o login automático concluir; se ele não
+	// vier, a sessão está morta e precisa ser descartada para voltar ao
+	// pareamento por QR code.
+	if current.Jid != "" {
+		logger.LogInfo("[%s] Instance has a stored session (%s), waiting for login before resetting", instance.Id, current.Jid)
+
+		if i.waitForLogin(instance.Id, qrcodeLoginGrace) {
+			return nil, fmt.Errorf("session already logged in")
+		}
+
+		if err := i.whatsmeowService.ResetSession(instance.Id); err != nil {
+			logger.LogError("[%s] Failed to reset session: %v", instance.Id, err)
+			return nil, fmt.Errorf("failed to reset session: %w", err)
+		}
+	}
+
 	// O QR code é gravado no banco pelo goroutine do cliente. Iniciar o cliente
 	// envolve conectar no banco de sessões, buscar a versão do WhatsApp Web e
 	// abrir o websocket, então aguardamos até o QR code aparecer.
 	logger.LogInfo("[%s] Waiting for QR code generation...", instance.Id)
 
-	deadline := time.Now().Add(qrcodeWaitTimeout)
-	for time.Now().Before(deadline) {
-		time.Sleep(qrcodePollInterval)
+	qr, err := i.waitForQrcode(instance.Id, qrcodeWaitTimeout)
+	if err != nil {
+		return nil, err
+	}
 
-		if current := i.clientPointer[instance.Id]; current != nil && current.IsLoggedIn() {
-			return nil, fmt.Errorf("session already logged in")
+	if qr == nil {
+		logger.LogError("[%s] No QR code generated after %s", instance.Id, qrcodeWaitTimeout)
+		return nil, fmt.Errorf("no QR code available. Please wait a moment and try again")
+	}
+
+	return qr, nil
+}
+
+// waitForLogin aguarda o cliente da instância concluir o login, retornando false
+// se isso não acontecer dentro do tempo informado
+func (i instances) waitForLogin(instanceId string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		if client := i.clientPointer[instanceId]; client != nil && client.IsLoggedIn() {
+			return true
 		}
 
-		qr, err := i.readQrcode(instance.Id)
+		if !time.Now().Before(deadline) {
+			return false
+		}
+
+		time.Sleep(qrcodePollInterval)
+	}
+}
+
+// waitForQrcode aguarda o goroutine do cliente gravar um QR code no banco,
+// retornando nil se nenhum QR code aparecer dentro do tempo informado
+func (i instances) waitForQrcode(instanceId string, timeout time.Duration) (*QrcodeStruct, error) {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		qr, err := i.readQrcode(instanceId)
 		if err != nil {
 			return nil, err
 		}
@@ -485,10 +527,17 @@ func (i instances) GetQr(instance *instance_model.Instance) (*QrcodeStruct, erro
 		if qr != nil {
 			return qr, nil
 		}
-	}
 
-	logger.LogError("[%s] No QR code generated after %s", instance.Id, qrcodeWaitTimeout)
-	return nil, fmt.Errorf("no QR code available. Please wait a moment and try again")
+		if client := i.clientPointer[instanceId]; client != nil && client.IsLoggedIn() {
+			return nil, fmt.Errorf("session already logged in")
+		}
+
+		if !time.Now().Before(deadline) {
+			return nil, nil
+		}
+
+		time.Sleep(qrcodePollInterval)
+	}
 }
 
 // readQrcode busca o QR code mais recente gravado no banco. Retorna nil quando

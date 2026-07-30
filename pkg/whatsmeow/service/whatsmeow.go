@@ -59,6 +59,7 @@ type WhatsmeowService interface {
 	ConnectOnStartup(clientName string)
 	StartInstance(instanceId string) error
 	ReconnectClient(instanceId string) error
+	ResetSession(instanceId string) error
 	ClearInstanceCache(instanceId string, token string) error
 	CallWebhook(instance *instance_model.Instance, queueName string, jsonData []byte)
 	SendToGlobalQueues(event string, jsonData []byte, userId string)
@@ -302,6 +303,112 @@ func (w whatsmeowService) ForceUpdateJid(instanceId string, number string) error
 	return nil
 }
 
+// openStoreContainer abre o container de sessões do whatsmeow (postgres ou sqlite)
+func (w whatsmeowService) openStoreContainer() (*sqlstore.Container, error) {
+	var dbLog waLog.Logger
+	if w.config.WaDebug != "" {
+		dbLog = waLog.Stdout("Database", w.config.WaDebug, true)
+	}
+
+	if w.config.PostgresAuthDB != "" {
+		return sqlstore.New(context.Background(), "postgres", w.config.PostgresAuthDB, dbLog)
+	}
+
+	dsn := fmt.Sprintf("file:%s/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=5000&cache=shared&mode=rwc&_journal_mode=WAL", w.exPath)
+	return sqlstore.New(context.Background(), "sqlite", dsn, dbLog)
+}
+
+// ResetSession descarta o pareamento atual da instância e sobe um cliente novo.
+//
+// Enquanto a instância tiver um JID, o StartClient entra no fluxo de "já logado"
+// e nunca abre o canal de QR code. Depois que a sessão é invalidada pelo
+// WhatsApp (logout pelo celular, sessão expirada), isso deixa a instância presa:
+// ela não loga e também não gera QR code. Apagar o device e o JID devolve a
+// instância ao estado de primeiro pareamento.
+func (w whatsmeowService) ResetSession(instanceId string) error {
+	logger := w.loggerWrapper.GetLogger(instanceId)
+
+	instance, err := w.instanceRepository.GetInstanceByID(instanceId)
+	if err != nil {
+		return err
+	}
+
+	logger.LogWarn("[%s] Resetting session to allow a new QR code (jid: %s)", instanceId, instance.Jid)
+
+	if client, exists := w.clientPointer[instanceId]; exists {
+		if mycli, ok := w.myClientPointer[instanceId]; ok && mycli.eventHandlerID != 0 {
+			client.RemoveEventHandler(mycli.eventHandlerID)
+		}
+
+		if client.IsConnected() {
+			client.Disconnect()
+		}
+	}
+
+	if killChan, exists := w.killChannel[instanceId]; exists {
+		select {
+		case killChan <- true:
+		default:
+		}
+	}
+
+	delete(w.clientPointer, instanceId)
+	delete(w.myClientPointer, instanceId)
+	delete(w.killChannel, instanceId)
+	w.userInfoCache.Delete(instance.Token)
+
+	if instance.Jid != "" {
+		if err := w.deleteDeviceStore(instanceId, instance.Jid); err != nil {
+			logger.LogError("[%s] Error deleting device store: %v", instanceId, err)
+		}
+	}
+
+	if err := w.instanceRepository.UpdateJid(instanceId, ""); err != nil {
+		return fmt.Errorf("failed to clear instance jid: %w", err)
+	}
+
+	if err := w.instanceRepository.UpdateQrcode(instanceId, ""); err != nil {
+		logger.LogError("[%s] Error clearing QR code: %v", instanceId, err)
+	}
+
+	if err := w.instanceRepository.UpdateConnected(instanceId, false, "Session reset to generate a new QR code"); err != nil {
+		logger.LogError("[%s] Error updating instance status: %v", instanceId, err)
+	}
+
+	return w.StartInstance(instanceId)
+}
+
+// deleteDeviceStore remove o device pareado do store do whatsmeow
+func (w whatsmeowService) deleteDeviceStore(instanceId string, rawJid string) error {
+	jid, ok := utils.ParseJID(rawJid)
+	if !ok {
+		return fmt.Errorf("invalid jid: %s", rawJid)
+	}
+
+	container, err := w.openStoreContainer()
+	if err != nil {
+		return err
+	}
+	defer container.Close()
+
+	device, err := container.GetDevice(context.Background(), jid)
+	if err != nil {
+		return err
+	}
+
+	if device == nil {
+		w.loggerWrapper.GetLogger(instanceId).LogInfo("[%s] No device store found for jid %s", instanceId, rawJid)
+		return nil
+	}
+
+	if err := container.DeleteDevice(context.Background(), device); err != nil {
+		return err
+	}
+
+	w.loggerWrapper.GetLogger(instanceId).LogInfo("[%s] Device store deleted for jid %s", instanceId, rawJid)
+	return nil
+}
+
 func (w whatsmeowService) StartClient(cd *ClientData) {
 
 	w.loggerWrapper.GetLogger(cd.Instance.Id).LogInfo("Starting websocket connection to Whatsapp for user '%s'", cd.Instance.Id)
@@ -315,24 +422,7 @@ func (w whatsmeowService) StartClient(cd *ClientData) {
 		}
 	}
 
-	var container *sqlstore.Container
-
-	if w.config.WaDebug != "" {
-		dbLog := waLog.Stdout("Database", w.config.WaDebug, true)
-		if w.config.PostgresAuthDB != "" {
-			container, err = sqlstore.New(context.Background(), "postgres", w.config.PostgresAuthDB, dbLog)
-		} else {
-			dsn := fmt.Sprintf("file:%s/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=5000&cache=shared&mode=rwc&_journal_mode=WAL", w.exPath)
-			container, err = sqlstore.New(context.Background(), "sqlite", dsn, dbLog)
-		}
-	} else {
-		if w.config.PostgresAuthDB != "" {
-			container, err = sqlstore.New(context.Background(), "postgres", w.config.PostgresAuthDB, nil)
-		} else {
-			dsn := fmt.Sprintf("file:%s/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=5000&cache=shared&mode=rwc&_journal_mode=WAL", w.exPath)
-			container, err = sqlstore.New(context.Background(), "sqlite", dsn, nil)
-		}
-	}
+	container, err := w.openStoreContainer()
 
 	if err != nil {
 		w.loggerWrapper.GetLogger(cd.Instance.Id).LogError("[%s] Failed to create container: %v", cd.Instance.Id, err)
