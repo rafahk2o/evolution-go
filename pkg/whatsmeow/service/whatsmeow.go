@@ -61,6 +61,7 @@ type WhatsmeowService interface {
 	StartInstance(instanceId string) error
 	ReconnectClient(instanceId string) error
 	ResetSession(instanceId string) error
+	ResyncAppState(instanceId string) error
 	ClearInstanceCache(instanceId string, token string) error
 	CallWebhook(instance *instance_model.Instance, queueName string, jsonData []byte)
 	SendToGlobalQueues(event string, jsonData []byte, userId string)
@@ -401,6 +402,38 @@ func (w whatsmeowService) ResetSession(instanceId string) error {
 }
 
 // deleteDeviceStore remove o device pareado do store do whatsmeow
+// ResyncAppState força um full sync dos patches de app state da instância.
+//
+// Instâncias pareadas antes da migration do NCT salt (whatsmeow v14) ficam com
+// whatsmeow_nct_salt vazia: o salt só chega no history sync do pareamento ou
+// pela mutação nct_salt_sync, que vive no patch regular_high. Sem o salt o
+// generateCsToken devolve nil, e mensagens para contatos sem privacy token
+// (lead frio) saem sem tctoken nem cstoken. O full sync reprocessa a mutação
+// sem precisar reparear. Os demais patches vão junto porque critical_unblock_low
+// carrega os contatos, de onde saem os mapeamentos PN->LID que o cstoken exige.
+func (w whatsmeowService) ResyncAppState(instanceId string) error {
+	client, exists := w.clientPointer[instanceId]
+	if !exists || client == nil {
+		return fmt.Errorf("client not found for instance %s", instanceId)
+	}
+
+	if !client.IsConnected() || !client.IsLoggedIn() {
+		return fmt.Errorf("instance %s is not connected", instanceId)
+	}
+
+	logger := w.loggerWrapper.GetLogger(instanceId)
+	ctx := context.Background()
+
+	for _, name := range appstate.AllPatchNames {
+		if err := client.FetchAppState(ctx, name, true, false); err != nil {
+			return fmt.Errorf("failed to fetch app state %s: %v", name, err)
+		}
+		logger.LogInfo("[%s] App state resynced: %s", instanceId, name)
+	}
+
+	return nil
+}
+
 func (w whatsmeowService) deleteDeviceStore(instanceId string, rawJid string) error {
 	jid, ok := utils.ParseJID(rawJid)
 	if !ok {

@@ -29,6 +29,7 @@ type InstanceService interface {
 	Create(data *CreateStruct) (*instance_model.Instance, error)
 	Connect(data *ConnectStruct, instance *instance_model.Instance) (*instance_model.Instance, string, string, error)
 	Reconnect(instance *instance_model.Instance) error
+	ResyncAppState(instance *instance_model.Instance) error
 	Disconnect(instance *instance_model.Instance) (*instance_model.Instance, error)
 	Logout(instance *instance_model.Instance) (*instance_model.Instance, error)
 	Status(instance *instance_model.Instance) (*StatusStruct, error)
@@ -329,6 +330,15 @@ func (i instances) Reconnect(instance *instance_model.Instance) error {
 	}
 
 	return i.whatsmeowService.ReconnectClient(instance.Id)
+}
+
+func (i instances) ResyncAppState(instance *instance_model.Instance) error {
+	_, err := i.ensureClientConnected(instance.Id)
+	if err != nil {
+		return err
+	}
+
+	return i.whatsmeowService.ResyncAppState(instance.Id)
 }
 
 func (i instances) Disconnect(instance *instance_model.Instance) (*instance_model.Instance, error) {

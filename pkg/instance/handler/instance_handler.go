@@ -17,6 +17,7 @@ type InstanceHandler interface {
 	Create(ctx *gin.Context)
 	Connect(ctx *gin.Context)
 	Reconnect(ctx *gin.Context)
+	ResyncAppState(ctx *gin.Context)
 	Disconnect(ctx *gin.Context)
 	Logout(ctx *gin.Context)
 	Delete(ctx *gin.Context)
@@ -179,6 +180,33 @@ func (i *instanceHandler) Reconnect(ctx *gin.Context) {
 	}
 
 	err := i.instanceService.Reconnect(instance)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "success"})
+}
+
+// ResyncAppState forces a full app state sync
+// @Summary Force a full app state resync
+// @Description Reprocesses all app state patches. Restores the NCT salt (used to derive the cstoken) on instances paired before the salt was persisted, without requiring a re-pair.
+// @Tags Instance
+// @Accept json
+// @Produce json
+// @Success 200 {object} gin.H "App state resynced successfully"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /instance/resync-appstate [post]
+func (i *instanceHandler) ResyncAppState(ctx *gin.Context) {
+	getInstance := ctx.MustGet("instance")
+
+	instance, ok := getInstance.(*instance_model.Instance)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "instance not found"})
+		return
+	}
+
+	err := i.instanceService.ResyncAppState(instance)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
