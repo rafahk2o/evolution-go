@@ -40,6 +40,18 @@ test("instance action bars reserve enough width for the disconnect label", () =>
   });
 });
 
+test("narrow instance cards stack the label above all action icons", () => {
+  const calls = source();
+  const tweaks = fs.readFileSync(path.join(__dirname, "manager-tweaks.js"), "utf8");
+
+  assert.match(calls, /classList\.add\("wc-instance-card"\)/);
+  assert.match(tweaks, /@container instance-card \(max-width:360px\)/);
+  assert.match(tweaks, /grid-template-columns:repeat\(auto-fit,minmax\(38px,1fr\)\)/);
+  assert.match(tweaks, />button\.flex-1\{grid-column:1\/-1/);
+  assert.match(tweaks, />div\[class\*="w-px"\],\.manager-instance-actions>\.cw-action-sep\{display:none!important\}/);
+  assert.match(tweaks, /overflow:visible!important/);
+});
+
 test("authenticates call ownership and streams SSE through fetch", () => {
   const script = source();
   assert.match(script, /X-Call-Client-ID/);

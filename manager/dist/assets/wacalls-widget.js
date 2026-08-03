@@ -213,9 +213,11 @@
     state.instances.forEach(function (instance) {
       var card = findCard(instance);
       if (!card) return;
+      card.classList.add("wc-instance-card");
       var actions = actionRow(card);
       if (!actions) return;
       actions.classList.add("wc-action-bar");
+      actions.classList.add("manager-instance-actions");
       var selector = '[data-wacalls-button-for="' + instance.id + '"]';
       var button = actions.querySelector(selector);
       if (!button) {

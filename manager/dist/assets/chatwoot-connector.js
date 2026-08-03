@@ -166,6 +166,7 @@
       var actions = actionRow(card);
       if (!actions || actions === card) return;
       actions.classList.add("cw-action-bar");
+      actions.classList.add("manager-instance-actions");
 
       var button = actions.querySelector('[data-chatwoot-button-for="' + instance.id + '"]');
       if (!button) {

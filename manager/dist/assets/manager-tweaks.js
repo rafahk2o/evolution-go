@@ -8,6 +8,23 @@
   var hostContainer = null;
   var hostOriginalPosition = "";
   var pendingFrame = null;
+  var instanceActionStyleId = "manager-instance-action-layout";
+
+  function installInstanceActionStyles() {
+    if (document.getElementById(instanceActionStyleId)) return;
+
+    var style = document.createElement("style");
+    style.id = instanceActionStyleId;
+    style.textContent = ""
+      + ".wc-instance-card,.cw-chatwoot-card{container-type:inline-size;container-name:instance-card}"
+      + "@container instance-card (max-width:360px){"
+      + ".manager-instance-actions{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(38px,1fr))!important;align-items:stretch!important;overflow:visible!important}"
+      + ".manager-instance-actions>button{width:100%!important;min-width:0!important;max-width:none!important;padding-left:0!important;padding-right:0!important}"
+      + ".manager-instance-actions>button.flex-1{grid-column:1/-1;min-width:0!important;width:100%!important;border-bottom:1px solid var(--sidebar-border,var(--border,#2a2a2a))}"
+      + '.manager-instance-actions>div[class*="w-px"],.manager-instance-actions>.cw-action-sep{display:none!important}'
+      + "}";
+    document.head.appendChild(style);
+  }
 
   function isInstancesPage() {
     return /^\/manager\/instances/.test(window.location.pathname);
@@ -98,6 +115,7 @@
   }
 
   function boot() {
+    installInstanceActionStyles();
     evaluate();
     var observer = new MutationObserver(scheduleEvaluate);
     observer.observe(document.documentElement, {
