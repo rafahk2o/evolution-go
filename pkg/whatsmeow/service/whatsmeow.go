@@ -45,10 +45,10 @@ import (
 	logger_wrapper "github.com/EvolutionAPI/evolution-go/pkg/logger"
 	message_model "github.com/EvolutionAPI/evolution-go/pkg/message/model"
 	message_repository "github.com/EvolutionAPI/evolution-go/pkg/message/repository"
+	"github.com/EvolutionAPI/evolution-go/pkg/passkey/ceremony"
 	poll_service "github.com/EvolutionAPI/evolution-go/pkg/poll/service"
 	storage_interfaces "github.com/EvolutionAPI/evolution-go/pkg/storage/interfaces"
 	"github.com/EvolutionAPI/evolution-go/pkg/utils"
-	"github.com/EvolutionAPI/evolution-go/pkg/passkey/ceremony"
 )
 
 type CallEventHandler func(instance *instance_model.Instance, client *whatsmeow.Client, event any)
@@ -107,6 +107,8 @@ type whatsmeowService struct {
 	loggerWrapper      *logger_wrapper.LoggerManager
 	chatwootClient     *chatwoot.Client
 	passkeyCeremony    *ceremony.Store
+	storeContainer     *storeContainerProvider
+	clientStarts       *clientStartGate
 }
 
 type MyClient struct {
@@ -327,18 +329,32 @@ func (w whatsmeowService) ForceUpdateJid(instanceId string, number string) error
 }
 
 // openStoreContainer abre o container de sessões do whatsmeow (postgres ou sqlite)
-func (w whatsmeowService) openStoreContainer() (*sqlstore.Container, error) {
+func (w *whatsmeowService) createStoreContainer() (*sqlstore.Container, error) {
 	var dbLog waLog.Logger
 	if w.config.WaDebug != "" {
 		dbLog = waLog.Stdout("Database", w.config.WaDebug, true)
 	}
 
 	if w.config.PostgresAuthDB != "" {
-		return sqlstore.New(context.Background(), "postgres", w.config.PostgresAuthDB, dbLog)
+		if w.authDB == nil {
+			return nil, fmt.Errorf("shared auth database is not initialized")
+		}
+		container := sqlstore.NewWithDB(w.authDB, "postgres", dbLog)
+		if err := container.Upgrade(context.Background()); err != nil {
+			return nil, fmt.Errorf("failed to upgrade database: %w", err)
+		}
+		return container, nil
 	}
 
 	dsn := fmt.Sprintf("file:%s/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=5000&cache=shared&mode=rwc&_journal_mode=WAL", w.exPath)
 	return sqlstore.New(context.Background(), "sqlite", dsn, dbLog)
+}
+
+func (w *whatsmeowService) openStoreContainer() (*sqlstore.Container, error) {
+	if w.storeContainer == nil {
+		return w.createStoreContainer()
+	}
+	return w.storeContainer.Get()
 }
 
 // ResetSession descarta o pareamento atual da instância e sobe um cliente novo.
@@ -444,8 +460,6 @@ func (w whatsmeowService) deleteDeviceStore(instanceId string, rawJid string) er
 	if err != nil {
 		return err
 	}
-	defer container.Close()
-
 	device, err := container.GetDevice(context.Background(), jid)
 	if err != nil {
 		return err
@@ -467,6 +481,20 @@ func (w whatsmeowService) deleteDeviceStore(instanceId string, rawJid string) er
 func (w whatsmeowService) StartClient(cd *ClientData) {
 
 	w.loggerWrapper.GetLogger(cd.Instance.Id).LogInfo("Starting websocket connection to Whatsapp for user '%s'", cd.Instance.Id)
+
+	startPending := false
+	if w.clientStarts != nil {
+		if !w.clientStarts.Begin(cd.Instance.Id) {
+			w.loggerWrapper.GetLogger(cd.Instance.Id).LogInfo("[%s] Client startup already in progress", cd.Instance.Id)
+			return
+		}
+		startPending = true
+		defer func() {
+			if startPending {
+				w.clientStarts.End(cd.Instance.Id)
+			}
+		}()
+	}
 
 	var deviceStore *store.Device
 	var err error
@@ -714,6 +742,11 @@ func (w whatsmeowService) StartClient(cd *ClientData) {
 			}
 		}
 
+	}
+
+	if startPending {
+		w.clientStarts.End(cd.Instance.Id)
+		startPending = false
 	}
 
 	// Removed auto-reconnect logic to prevent infinite loops
@@ -2980,7 +3013,7 @@ func NewWhatsmeowService(
 	// Inicializar PollService de forma segura
 	pollSvc := poll_service.NewPollService(authDB, loggerWrapper)
 
-	return &whatsmeowService{
+	service := &whatsmeowService{
 		instanceRepository: instanceRepository,
 		authDB:             authDB,
 		messageRepository:  messageRepository,
@@ -3002,7 +3035,10 @@ func NewWhatsmeowService(
 		loggerWrapper:      loggerWrapper,
 		chatwootClient:     chatwootClient,
 		passkeyCeremony:    ceremony.NewStore(),
+		clientStarts:       newClientStartGate(),
 	}
+	service.storeContainer = newStoreContainerProvider(service.createStoreContainer)
+	return service
 }
 
 // GetPollService retorna o serviço de polls (evita dupla inicialização)
