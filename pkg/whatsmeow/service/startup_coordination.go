@@ -3,8 +3,13 @@ package whatsmeow_service
 import (
 	"sync"
 
+	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 )
+
+func configureConnectionRecovery(client *whatsmeow.Client) {
+	client.EnableAutoReconnect = true
+}
 
 type storeContainerProvider struct {
 	mu        sync.Mutex

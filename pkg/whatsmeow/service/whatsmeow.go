@@ -635,7 +635,7 @@ func (w whatsmeowService) StartClient(cd *ClientData) {
 		}
 	}
 
-	client.EnableAutoReconnect = false
+	configureConnectionRecovery(client)
 	client.AutoTrustIdentity = true
 
 	mycli := &MyClient{
@@ -2160,13 +2160,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			mycli.loggerWrapper.GetLogger(mycli.userID).LogError("[%s] Error updating instance: %s", mycli.Instance.Id, err)
 		}
 
-		// Trigger instance restart via websocket-capable service (non-blocking)
-		go func(instanceID string) {
-			mycli.loggerWrapper.GetLogger(instanceID).LogInfo("[%s] Disconnected detected, restarting instance", instanceID)
-			if err := mycli.service.ReconnectClient(instanceID); err != nil {
-				mycli.loggerWrapper.GetLogger(instanceID).LogError("[%s] Failed to restart instance: %v", instanceID, err)
-			}
-		}(mycli.userID)
+		// Unexpected socket closures are retried by whatsmeow's native
+		// auto-reconnect loop. Starting a second client here races that loop and
+		// can leave the replacement client disconnected.
 	case *events.LabelEdit:
 		doWebhook = true
 		postMap["event"] = "LabelEdit"
